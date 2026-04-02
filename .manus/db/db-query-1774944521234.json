@@ -1,0 +1,60 @@
+{
+  "query": "SELECT * FROM user_api_configs WHERE userId = 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qf4W4Hatupw26PV.root --database FL55Eub6nFftzszZA77BVq --execute SELECT * FROM user_api_configs WHERE userId = 1;",
+  "rows": [
+    {
+      "id": "1",
+      "userId": "1",
+      "configKey": "tts",
+      "modelName": "speech-02-hd",
+      "apiKey": "enc:2e0216d3a353715f235d55b1f7451f85:2c71332d7dfae7da58fa3abb421a8cb7b904a2f6e029ed9aa1f584534f958fb212d461c90b46ee14d852b347851add4a2babb47a96d8c861bfb852501769f067f16b6ab06841fa7b29af83c2c78f572fd26fcc8b2ef10d89f9c277f9bdb81f98a00a019707257f90217736e71274c2e91690b4e12f0cc98a575217303c:a186ba75f20bd73d71a1e78b77ec355b",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "createdAt": "2026-03-31 07:53:30",
+      "updatedAt": "2026-03-31 07:53:30"
+    },
+    {
+      "id": "2",
+      "userId": "1",
+      "configKey": "image_generation",
+      "modelName": "image-01",
+      "apiKey": "enc:02c67872b02397da4581b84795cfb13b:bd46c6a56dd867b8eca876747f0e04e52fdada438f4e2ddf2db4b82ee16664a88dd9b117dc2c660749468685b5d1f3f1f94b682fdfc7afad9648070557add40f6acb1786d07ca29690d4eb1404e4a81204d18012823de103f1625a276b05863c823fb8a499b049dbf23c27cfccb5aa83ef2d04288730713caf01951e98:ea56c13e828cc374c29e9f6a1f060df5",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "createdAt": "2026-03-31 07:53:38",
+      "updatedAt": "2026-03-31 07:53:38"
+    },
+    {
+      "id": "3",
+      "userId": "1",
+      "configKey": "kimi",
+      "modelName": "moonshot-v1-8k",
+      "apiKey": "enc:2f7d628b1f521cddc428b88459d5585e:2f1f7d9526bf943a310a52379a1cd0f788969c79b1d266cec3c5b699f22f34ee966db508039484ce6c529c1178f6f101dc50ea:f848a149206502d9efa085a2059637d4",
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "createdAt": "2026-03-31 07:53:54",
+      "updatedAt": "2026-03-31 07:53:54"
+    },
+    {
+      "id": "4",
+      "userId": "1",
+      "configKey": "image_processing",
+      "modelName": "gemini-3.1-flash-image-preview",
+      "apiKey": "enc:70a26b5936c672174b5f20684efe5dcc:3e1dc682692f90c909c29f538b437bbce0ef1bcda45b82ab0b8f47c93b7ded1a9ad6f84d18119675d1de213844294afa3674e9:e646a9a1143ad649d0c9365190f36863",
+      "baseUrl": "https://api.gdoubolai.com/v1",
+      "createdAt": "2026-03-31 07:55:02",
+      "updatedAt": "2026-03-31 07:55:02"
+    },
+    {
+      "id": "5",
+      "userId": "1",
+      "configKey": "text_generation",
+      "modelName": "gemini-3.1-flash-lite-preview",
+      "apiKey": "enc:6fad09eb84ff64304d54548ad5356e76:e73b71f52b878e0d6e6a01b7f27cc2f67342bde511909e5abe8218f76133fd9a91cab08827e3e09a87953d1eebfa1ff0918606:d47f0b15292d6dd1c928c84c8243d834",
+      "baseUrl": "https://api.gdoubolai.com/v1",
+      "createdAt": "2026-03-31 07:57:16",
+      "updatedAt": "2026-03-31 07:57:16"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tconfigKey\tmodelName\tapiKey\tbaseUrl\tcreatedAt\tupdatedAt\n1\t1\ttts\tspeech-02-hd\tenc:2e0216d3a353715f235d55b1f7451f85:2c71332d7dfae7da58fa3abb421a8cb7b904a2f6e029ed9aa1f584534f958fb212d461c90b46ee14d852b347851add4a2babb47a96d8c861bfb852501769f067f16b6ab06841fa7b29af83c2c78f572fd26fcc8b2ef10d89f9c277f9bdb81f98a00a019707257f90217736e71274c2e91690b4e12f0cc98a575217303c:a186ba75f20bd73d71a1e78b77ec355b\thttps://api.minimaxi.com/v1\t2026-03-31 07:53:30\t2026-03-31 07:53:30\n2\t1\timage_generation\timage-01\tenc:02c67872b02397da4581b84795cfb13b:bd46c6a56dd867b8eca876747f0e04e52fdada438f4e2ddf2db4b82ee16664a88dd9b117dc2c660749468685b5d1f3f1f94b682fdfc7afad9648070557add40f6acb1786d07ca29690d4eb1404e4a81204d18012823de103f1625a276b05863c823fb8a499b049dbf23c27cfccb5aa83ef2d04288730713caf01951e98:ea56c13e828cc374c29e9f6a1f060df5\thttps://api.minimaxi.com/v1\t2026-03-31 07:53:38\t2026-03-31 07:53:38\n3\t1\tkimi\tmoonshot-v1-8k\tenc:2f7d628b1f521cddc428b88459d5585e:2f1f7d9526bf943a310a52379a1cd0f788969c79b1d266cec3c5b699f22f34ee966db508039484ce6c529c1178f6f101dc50ea:f848a149206502d9efa085a2059637d4\thttps://api.moonshot.cn/v1\t2026-03-31 07:53:54\t2026-03-31 07:53:54\n4\t1\timage_processing\tgemini-3.1-flash-image-preview\tenc:70a26b5936c672174b5f20684efe5dcc:3e1dc682692f90c909c29f538b437bbce0ef1bcda45b82ab0b8f47c93b7ded1a9ad6f84d18119675d1de213844294afa3674e9:e646a9a1143ad649d0c9365190f36863\thttps://api.gdoubolai.com/v1\t2026-03-31 07:55:02\t2026-03-31 07:55:02\n5\t1\ttext_generation\tgemini-3.1-flash-lite-preview\tenc:6fad09eb84ff64304d54548ad5356e76:e73b71f52b878e0d6e6a01b7f27cc2f67342bde511909e5abe8218f76133fd9a91cab08827e3e09a87953d1eebfa1ff0918606:d47f0b15292d6dd1c928c84c8243d834\thttps://api.gdoubolai.com/v1\t2026-03-31 07:57:16\t2026-03-31 07:57:16\n",
+  "stderr": "",
+  "execution_time_ms": 350
+}

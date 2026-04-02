@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1774938346016,
+      "tag": "0000_tiny_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1774938804353,
+      "tag": "0001_quick_nuke",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1774942618968,
+      "tag": "0002_typical_jack_murdock",
+      "breakpoints": true
+    }
+  ]
+}
