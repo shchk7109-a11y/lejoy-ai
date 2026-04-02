@@ -179,21 +179,22 @@ export async function generateImage(
     const imageBase64 = json.data?.image_base64?.[0];
 
     if (imageUrl) {
-      // Download the image and re-upload to R2 as JPEG (MiniMax URLs expire in 24h)
-      try {
-        const imgRes = await fetch(imageUrl);
-        if (imgRes.ok) {
-          const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-          const contentType = imgRes.headers.get("content-type") || "image/jpeg";
-          const ext = contentType.includes("png") ? "png" : "jpg";
-          const { url } = await storagePut(`images/${nanoid()}.${ext}`, imgBuffer, contentType);
-          return url;
+      // Use MiniMax URL directly for speed (valid 24h, sufficient for reading + export)
+      // Background: re-upload to R2 for persistence
+      (async () => {
+        try {
+          const imgRes = await fetch(imageUrl);
+          if (imgRes.ok) {
+            const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+            const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+            const ext = contentType.includes("png") ? "png" : "jpg";
+            await storagePut(`images/${nanoid()}.${ext}`, imgBuffer, contentType);
+          }
+        } catch (e) {
+          console.warn("[ImageGen] Background re-upload failed:", e);
         }
-      } catch (e) {
-        // If download fails, return the temporary URL as fallback
-        console.warn("[ImageGen] Failed to re-upload to R2, using temporary URL", e);
-      }
-      return imageUrl;
+      })();
+      return imageUrl; // Return immediately, don't wait for upload
     }
 
     if (imageBase64) {
@@ -866,9 +867,14 @@ export async function analyzeContent(
 3. 不要包含营养成分分析表和健康评分，这些属于“美食健康指数”功能
 4. 所有内容必须使用中文，标签使用中文短语`,
 
-    PLANT: `你是一位资深植物学家和园艺专家。请准确识别植物并提供详细信息。
-返回JSON格式：{"title":"植物中文名","description":"植物介绍","scientificName":"拉丁学名","family":"科属","flowerLanguage":"花语与寓意（详细描述花语含义和在中国文化中的象征意义）","culturalMeaning":"文化含义与象征（在诗词、传统文化中的地位和寓意）","details":["养护要点1","养护要点2"],"tags":["标签"],"advice":"养护建议"}
-【重要】识花时必须提供详细的花语寓意和文化含义，包括在中国传统文化、诗词中的象征意义，这对中老年用户非常重要。所有内容必须使用中文。`,
+    PLANT: `\u4f60\u662f\u4e00\u4f4d\u4e16\u754c\u7ea7\u690d\u7269\u5206\u7c7b\u5b66\u5bb6\u3002\u8bf7\u4ece\u56fe\u7247\u4e2d\u4ed4\u7ec6\u89c2\u5bdf\u690d\u7269\u7684\u53f6\u7247\u5f62\u72b6\u3001\u82b1\u74e3\u7ed3\u6784\u3001\u82b1\u854a\u3001\u679d\u5e72\u3001\u6811\u76ae\u7b49\u5173\u952e\u7279\u5f81\u8fdb\u884c\u51c6\u786e\u9274\u5b9a\u3002
+\u3010\u8bc6\u522b\u8981\u6c42\u3011\u8bf7\u7279\u522b\u6ce8\u610f\u533a\u5206\u5916\u89c2\u76f8\u4f3c\u7684\u690d\u7269\uff1a
+- \u5e7f\u7389\u5170\uff08\u8377\u82b1\u7389\u5170\uff09vs \u7389\u5170\uff1a\u5e7f\u7389\u5170\u82b1\u5927\u767d\u8272\u3001\u53f6\u539a\u9769\u8d28\u3001\u5e38\u7eff\u4e54\u6728\uff1b\u7389\u5170\u82b1\u8f83\u5c0f\u3001\u843d\u53f6\u4e54\u6728
+- \u541b\u5b50\u5170 vs \u5176\u4ed6\u5170\u79d1\uff1a\u541b\u5b50\u5170\u662f\u8349\u672c\u690d\u7269\u3001\u53f6\u7247\u5e26\u72b6\u5bf9\u751f\u3001\u6a59\u7ea2\u8272\u82b1
+- \u6708\u5b63 vs \u73ab\u7470\uff1a\u89c2\u5bdf\u53f6\u7247\u5149\u6cfd\u5ea6\u548c\u82b1\u578b
+- \u6a31\u82b1 vs \u6843\u82b1 vs \u674e\u82b1\uff1a\u89c2\u5bdf\u82b1\u74e3\u5f62\u72b6\u548c\u5f00\u82b1\u65b9\u5f0f
+\u8fd4\u56deJSON\u683c\u5f0f\uff1a{"title":"\u690d\u7269\u4e2d\u6587\u540d","description":"\u690d\u7269\u4ecb\u7ecd","scientificName":"\u62c9\u4e01\u5b66\u540d","family":"\u79d1\u5c5e","flowerLanguage":"\u82b1\u8bed\u4e0e\u5bd3\u610f","culturalMeaning":"\u6587\u5316\u542b\u4e49\u4e0e\u8c61\u5f81","details":["\u517b\u62a4\u8981\u70b91","\u517b\u62a4\u8981\u70b92"],"tags":["\u6807\u7b7e"],"advice":"\u517b\u62a4\u5efa\u8bae"}
+\u3010\u91cd\u8981\u3011\u8bc6\u82b1\u65f6\u5fc5\u987b\u63d0\u4f9b\u8be6\u7ec6\u7684\u82b1\u8bed\u5bd3\u610f\u548c\u6587\u5316\u542b\u4e49\u3002\u5982\u679c\u4e0d\u786e\u5b9a\uff0c\u8bf7\u5217\u51fa\u6700\u53ef\u80fd\u76842-3\u4e2a\u5019\u9009\u5e76\u8bf4\u660e\u5224\u65ad\u4f9d\u636e\u3002\u6240\u6709\u5185\u5bb9\u5fc5\u987b\u4f7f\u7528\u4e2d\u6587\u3002`,
 
     HEALTH: `你是一位专业营养师和慢病管理专家。请分析食品的营养成分和健康影响。
 返回JSON格式：{"title":"食品名称","description":"营养概述（50字以内）","details":["营养分析要点"],"tags":["高蛋白","低碳水"],"healthyScore":75,"nutrition":{"calories":"142千卡/100克","protein":"17.2克/100克","fat":"6.5克/100克","carbs":"3.8克/100克","sodium":"450毫克/100克","sugar":"1.5克/100克"},"chronicDiseaseWarnings":[{"disease":"高血压","level":"适量食用","reason":"含钠量中等，建议烹饪时减少盐的用量"},{"disease":"糖尿病","level":"慎食","reason":"含糖量较高，可能影响血糖"},{"disease":"痛风","level":"可以食用","reason":"嘌呤含量低，对尿酸影响小"}],"advice":"综合健康建议"}

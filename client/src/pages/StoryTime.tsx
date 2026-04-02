@@ -124,44 +124,50 @@ export default function StoryTime() {
     setElapsedTime(0);
     timerRef.current = setInterval(() => setElapsedTime(Date.now() - t0), 1000);
 
-    const totalSteps = story.pages.length + 1; // N images + first audio
+    const totalSteps = story.pages.length * 2; // N images + N audios
     let steps: ProgressStep[] = [];
     for (let i = 0; i < story.pages.length; i++) {
-      steps.push({ label: `绘制第${i + 1}页插图`, status: "pending" });
+      steps.push({ label: `\u7ed8\u5236\u7b2c${i + 1}\u9875\u63d2\u56fe`, status: "pending" });
     }
-    steps.push({ label: "生成语音朗读", status: "pending" });
+    for (let i = 0; i < story.pages.length; i++) {
+      steps.push({ label: `\u751f\u6210\u7b2c${i + 1}\u9875\u8bed\u97f3`, status: "pending" });
+    }
     setProgressSteps(steps);
     setProgressPercent(0);
 
     const updatedStory = { ...story };
 
     try {
-      // Generate images
+      // Generate all images
       for (let i = 0; i < updatedStory.pages.length; i++) {
-        steps = updateStep(steps, i, "active", "正在绘制...");
+        steps = updateStep(steps, i, "active", "\u6b63\u5728\u7ed8\u5236...");
         setProgressSteps([...steps]);
         try {
           const imgResult = await imageMut.mutateAsync({ imagePrompt: updatedStory.pages[i].imagePrompt });
           updatedStory.pages[i].imageUrl = imgResult.imageUrl;
-          steps = updateStep(steps, i, "done", "插图完成");
+          steps = updateStep(steps, i, "done", "\u63d2\u56fe\u5b8c\u6210");
         } catch (e: any) {
           console.error(`Page ${i + 1} image failed:`, e);
-          steps = updateStep(steps, i, "error", "插图生成失败");
+          steps = updateStep(steps, i, "error", "\u63d2\u56fe\u751f\u6210\u5931\u8d25");
         }
         setProgressPercent(Math.round(((i + 1) / totalSteps) * 100));
       }
 
-      // Generate first page audio
-      const audioIdx = steps.length - 1;
-      steps = updateStep(steps, audioIdx, "active", "正在合成语音...");
-      setProgressSteps([...steps]);
-      try {
-        const audioResult = await audioMut.mutateAsync({ text: updatedStory.pages[0].text, voiceType });
-        updatedStory.pages[0].audioUrl = audioResult.audioUrl;
-        steps = updateStep(steps, audioIdx, "done", "语音合成完成");
-      } catch (e) {
-        console.error("First page audio failed:", e);
-        steps = updateStep(steps, audioIdx, "error", "语音合成失败");
+      // Generate ALL page audios
+      const audioBaseIdx = story.pages.length;
+      for (let i = 0; i < updatedStory.pages.length; i++) {
+        const stepIdx = audioBaseIdx + i;
+        steps = updateStep(steps, stepIdx, "active", "\u6b63\u5728\u5408\u6210\u8bed\u97f3...");
+        setProgressSteps([...steps]);
+        try {
+          const audioResult = await audioMut.mutateAsync({ text: updatedStory.pages[i].text, voiceType });
+          updatedStory.pages[i].audioUrl = audioResult.audioUrl;
+          steps = updateStep(steps, stepIdx, "done", "\u8bed\u97f3\u5b8c\u6210");
+        } catch (e) {
+          console.error(`Page ${i + 1} audio failed:`, e);
+          steps = updateStep(steps, stepIdx, "error", "\u8bed\u97f3\u5408\u6210\u5931\u8d25");
+        }
+        setProgressPercent(Math.round(((story.pages.length + i + 1) / totalSteps) * 100));
       }
       setProgressPercent(100);
 
