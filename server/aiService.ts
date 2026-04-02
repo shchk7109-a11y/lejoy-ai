@@ -831,7 +831,7 @@ export async function generateStoryStructure(params: {
     {
       "pageNumber": 1,
       "text": "中文故事内容",
-      "imagePrompt": "Children's book illustration, warm and cute style. [主角完整外观描述]. [本页场景描述]"
+      "imagePrompt": "Simple flat children's book illustration, minimal details, soft pastel colors, cartoon style. [主角完整外观描述]. [本页场景描述]"
     }
   ]
 }`;

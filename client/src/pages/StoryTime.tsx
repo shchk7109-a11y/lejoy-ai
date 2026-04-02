@@ -370,33 +370,33 @@ export default function StoryTime() {
     });
   }, [story, ensurePageAudio, stopAudio]);
 
-  // Auto-play: play current page audio, then advance to next page
+  // Auto-play: play all pages sequentially from page 0
   const startAutoPlay = useCallback(async () => {
-    if (!story || isAutoPlaying) return;
+    if (!story || autoPlayRef.current) return;
     setAudioError("");
     setIsAutoPlaying(true);
     autoPlayRef.current = true;
 
-    let pageIdx = currentPage;
-    while (pageIdx < story.pages.length && autoPlayRef.current) {
+    for (let pageIdx = 0; pageIdx < story.pages.length; pageIdx++) {
+      if (!autoPlayRef.current) break;
       setCurrentPage(pageIdx);
+
+      // Small delay to let UI update before playing
+      await new Promise(r => setTimeout(r, 200));
+      if (!autoPlayRef.current) break;
+
       const success = await playPageAudio(pageIdx, { trigger: "auto" });
       if (!autoPlayRef.current) break;
-      if (!success) {
-        setIsAutoPlaying(false);
-        autoPlayRef.current = false;
-        return;
-      }
-      pageIdx++;
+      if (!success) break;
     }
 
     setIsAutoPlaying(false);
     autoPlayRef.current = false;
-    if (pageIdx >= story.pages.length) {
-      setAudioStatus("故事朗读完成");
-      toast.success("故事讲完了！");
+    if (!autoPlayRef.current) {
+      setAudioStatus("\u6545\u4e8b\u6717\u8bfb\u5b8c\u6210");
+      toast.success("\u6545\u4e8b\u8bb2\u5b8c\u4e86\uff01");
     }
-  }, [story, isAutoPlaying, currentPage, playPageAudio]);
+  }, [story, playPageAudio]);
 
   const stopAutoPlay = useCallback(() => {
     autoPlayRef.current = false;
@@ -420,19 +420,20 @@ export default function StoryTime() {
     await playPageAudio(currentPage, { forceRegenerate: true, trigger: "manual" });
   };
 
+  // Keep a stable ref to startAutoPlay to avoid useEffect dependency issues
+  const startAutoPlayRef = useRef(startAutoPlay);
+  startAutoPlayRef.current = startAutoPlay;
+
   // Auto-start playback when entering reading step after story generation
   useEffect(() => {
     if (step === "reading" && shouldAutoPlayOnReadyRef.current) {
       shouldAutoPlayOnReadyRef.current = false;
-      // Use a longer delay and call startAutoPlay via a stable ref pattern
       const timer = setTimeout(() => {
-        if (!autoPlayRef.current) {
-          startAutoPlay();
-        }
+        startAutoPlayRef.current();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step]);
 
   useEffect(() => {
     return () => {
