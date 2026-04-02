@@ -48,6 +48,8 @@ function toPositiveInt(value: string, fallback: number): number {
 }
 
 export function isDevLoginEnabled() {
+  // Allow explicit opt-in even in production (for initial setup before OAuth is configured)
+  if (readEnv("DEV_LOGIN_ENABLED") === "true") return true;
   if (ENV.isProduction) return false;
   return readEnv("DEV_LOGIN_ENABLED") !== "false";
 }
