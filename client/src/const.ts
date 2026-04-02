@@ -3,7 +3,7 @@ import { toast } from "sonner";
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
 const LOGIN_UNAVAILABLE_TOAST_ID = "oauth-login-unavailable";
-const DEV_LOGIN_ENABLED = import.meta.env.DEV && import.meta.env.VITE_DEV_LOGIN_ENABLED !== "false";
+const DEV_LOGIN_ENABLED = import.meta.env.VITE_DEV_LOGIN_ENABLED === "true" || (import.meta.env.DEV && import.meta.env.VITE_DEV_LOGIN_ENABLED !== "false");
 
 export const canUseDevLogin = () => DEV_LOGIN_ENABLED;
 
