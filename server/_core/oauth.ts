@@ -2,7 +2,6 @@ import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
-import { getDevUser, isDevLoginEnabled } from "./dev";
 import { sdk } from "./sdk";
 
 function getQueryParam(req: Request, key: string): string | undefined {
@@ -11,46 +10,6 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 export function registerOAuthRoutes(app: Express) {
-  app.post("/api/dev/login", async (req: Request, res: Response) => {
-    if (!isDevLoginEnabled()) {
-      res.status(404).json({ error: "dev login is disabled" });
-      return;
-    }
-
-    try {
-      const devUser = getDevUser();
-      await db.upsertUser({
-        openId: devUser.openId,
-        name: devUser.name,
-        email: devUser.email,
-        loginMethod: devUser.loginMethod,
-        role: devUser.role,
-        lastSignedIn: new Date(),
-      });
-
-      const sessionToken = await sdk.createSessionToken(devUser.openId, {
-        name: devUser.name || "",
-        expiresInMs: ONE_YEAR_MS,
-      });
-
-      const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.status(200).json({
-        success: true,
-        user: {
-          id: devUser.id,
-          openId: devUser.openId,
-          name: devUser.name,
-          email: devUser.email,
-          role: devUser.role,
-        },
-      });
-    } catch (error) {
-      console.error("[DevAuth] Login failed", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "dev login failed" });
-    }
-  });
-
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");

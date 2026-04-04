@@ -6,7 +6,6 @@ import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
-import { getDevUserIfEnabled } from "./dev";
 import { ENV } from "./env";
 import type {
   ExchangeTokenRequest,
@@ -270,26 +269,6 @@ class SDKServer {
     const sessionUserId = session.openId;
     const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
-
-    const devUser = getDevUserIfEnabled(sessionUserId);
-    if (!user && devUser) {
-      await db.upsertUser({
-        openId: devUser.openId,
-        name: devUser.name,
-        email: devUser.email,
-        loginMethod: devUser.loginMethod,
-        role: devUser.role,
-        lastSignedIn: signedInAt,
-      });
-      user = await db.getUserByOpenId(devUser.openId);
-      if (!user) {
-        return {
-          ...devUser,
-          lastSignedIn: signedInAt,
-          updatedAt: signedInAt,
-        };
-      }
-    }
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {

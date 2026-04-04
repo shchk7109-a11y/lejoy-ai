@@ -5,10 +5,18 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { redirectToLogin } from "./const";
+import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    mutations: {
+      // 延长 mutation 超时，支持TTS、图片生成等长时间操作
+      networkMode: 'always',
+      retry: 0,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
@@ -18,7 +26,7 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  redirectToLogin({ silent: true });
+  window.location.href = getLoginUrl();
 };
 
 queryClient.getQueryCache().subscribe(event => {
@@ -43,10 +51,14 @@ const trpcClient = trpc.createClient({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        // 延长请求超时到180秒，支持TTS、图片生成等长时间操作
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
-        });
+          signal: init?.signal ?? controller.signal,
+        }).finally(() => clearTimeout(timeoutId));
       },
     }),
   ],

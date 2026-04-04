@@ -1,470 +1,367 @@
 import { useState } from "react";
-import { trpc } from "@/lib/trpc";
-import { ModuleHeader } from "@/components/ModuleHeader";
-import { ImageUploader } from "@/components/ImageUploader";
-import { VoiceButton } from "@/components/VoiceButton";
+import { ArrowLeft, Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Flower2, AlertTriangle, Leaf } from "lucide-react";
-import { useLocation } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+import VoiceInput from "@/components/VoiceInput";
+import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
-type AnalysisResult = {
+type Mode = "FOOD" | "HEALTH";
+
+const MODES: { id: Mode; icon: string; label: string; desc: string; color: string; btnColor: string }[] = [
+  { id: "FOOD", icon: "📊", label: "美食健康指数", desc: "输入菜名或抖音美食链接，AI分析营养成分、健康评分和注意事项", color: "bg-orange-50 border-orange-200", btnColor: "bg-orange-500 hover:bg-orange-600" },
+  { id: "HEALTH", icon: "💊", label: "健康百科", desc: "查询健康知识，了解症状与保健", color: "bg-blue-50 border-blue-200", btnColor: "bg-blue-600 hover:bg-blue-700" },
+];
+
+interface AnalysisResult {
   title?: string;
   description?: string;
-  scientificName?: string;
-  family?: string;
-  flowerLanguage?: string;
-  culturalMeaning?: string;
+  ingredients?: string[];
   details?: string[];
   tags?: string[];
   healthyScore?: number;
-  nutrition?: Record<string, string>;
-  chronicDiseaseWarnings?: Array<{ disease: string; level: string; reason: string }>;
+  nutrition?: { calories?: string; protein?: string; fat?: string; carbs?: string; sodium?: string; sugar?: string };
   advice?: string;
-  ingredients?: string[];
-  imageUrl?: string;
-};
+  generatedImageUrl?: string;
+}
 
-const TABS = [
-  { id: "FOOD" as const, label: "查菜谱", icon: "\u{1F372}" },
-  { id: "HEALTH" as const, label: "美食健康指数", icon: "\u{1F4CA}" },
-  { id: "PLANT" as const, label: "识花草", icon: "\u{1F33F}" },
-];
+// 检测是否为抖音/短视频链接
+function isVideoLink(text: string): boolean {
+  return /https?:\/\/(v\.douyin\.com|www\.douyin\.com|douyin\.com|vm\.tiktok\.com|www\.tiktok\.com)/i.test(text);
+}
 
-const NUTRITION_LABELS: Record<string, string> = {
-  calories: "热量", protein: "蛋白质", fat: "脂肪",
-  carbs: "碳水", sodium: "钠含量", sugar: "糖分",
-  fiber: "膳食纤维", cholesterol: "胆固醇",
-};
+/**
+ * 从抖音分享文本中智能提取菜名
+ */
+function extractFoodName(text: string): string {
+  // 1. 优先提取【】括号内的内容（常见格式）
+  const bracketMatch = text.match(/【([^】]+)】/);
+  if (bracketMatch) {
+    return bracketMatch[1]
+      .replace(/的做法|怎么做|教程|食谱|做法|配方|秘方|家常做法/g, "")
+      .trim();
+  }
 
-const NUTRITION_ICONS: Record<string, string> = {
-  calories: "\u{1F525}", protein: "\u{1F95A}", fat: "\u{1F951}",
-  carbs: "\u{1F35E}", sodium: "\u{1F9C2}", sugar: "\u{1F36C}",
-  fiber: "\u{1F96C}", cholesterol: "\u{1FAC0}",
-};
+  // 2. 去掉开头的数字、英文乱码、链接和常见提示语，获取纯中文内容
+  const cleanText = text
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/复制此链接.*/g, "")
+    .replace(/复制打开Dou音.*/g, "")
+    .replace(/复制打开抖音.*/g, "")
+    .replace(/^[\d\.]+\s*/g, "")
+    .replace(/^[A-Za-z@\.\/:0-9\s]+/g, "")
+    .trim();
 
-const NUTRITION_COLORS: Record<string, string> = {
-  calories: "bg-red-50 border-red-100",
-  protein: "bg-green-50 border-green-100",
-  fat: "bg-yellow-50 border-yellow-100",
-  carbs: "bg-orange-50 border-orange-100",
-  sodium: "bg-blue-50 border-blue-100",
-  sugar: "bg-pink-50 border-pink-100",
-};
+  // 3. 取第一个逗号前的内容作为菜名
+  const firstPhrase = cleanText.split(/[，！？。,!?]/)[0].trim();
+  if (firstPhrase.length >= 2 && firstPhrase.length <= 12) {
+    return firstPhrase;
+  }
+
+  // 4. 提取 #标签 中的菜名
+  const hashMatches = text.match(/#\s*([\u4e00-\u9fa5]{2,10})/g);
+  if (hashMatches) {
+    const skipWords = /美食|视频|推荐|分享|生活|日常|教程|厨房|烹饪|家常菜|谁懂|好吃|程度/;
+    const foodTag = hashMatches
+      .map(t => t.replace(/^#\s*/, ""))
+      .find(t => !skipWords.test(t));
+    if (foodTag) return foodTag;
+  }
+
+  if (cleanText.length >= 2) return cleanText.slice(0, 10);
+  return "";
+}
 
 export default function LifeAssistant() {
-  const [, setLocation] = useLocation();
-  const [mode, setMode] = useState<"PLANT" | "FOOD" | "HEALTH">("FOOD");
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [textHint, setTextHint] = useState("");
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [query, setQuery] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [showCreditsModal, setShowCreditsModal] = useState(false);
+  const [showLinkHint, setShowLinkHint] = useState(false);
 
-  const analyzeMut = trpc.lifeAssistant.analyze.useMutation({
-    onSuccess: (d) => { setResult(d.result as AnalysisResult); toast.success("分析完成！"); },
-    onError: (e) => toast.error(e.message),
+  const { data: creditsData } = trpc.credits.balance.useQuery();
+  const analyzeMutation = trpc.lifeAssistant.analyze.useMutation({
+    onSuccess: (data: AnalysisResult) => setResult(data),
+    onError: (err: { message: string }) => {
+      if (err.message.includes("积分不足")) {
+        setShowCreditsModal(true);
+      } else if (
+        err.message.includes("繁忙") ||
+        err.message.includes("429") ||
+        err.message.includes("TOO_MANY_REQUESTS") ||
+        err.message.includes("Rate limit")
+      ) {
+        toast.error("🙏 AI服务繁忙，请稍等1-2分钟后再试", { duration: 5000 });
+      } else {
+        toast.error(err.message || "AI分析失败，请稍后重试");
+      }
+    },
   });
 
-  const handleAnalyze = () => {
-    if (!imageBase64 && !textHint.trim()) {
-      toast.error(mode === "PLANT" ? "请上传花草照片或输入名称" : mode === "FOOD" ? "请输入菜名或上传菜品照片" : "请输入食品名称或上传照片");
-      return;
+  const handleQuery = (overrideQuery?: string) => {
+    if (!mode) return;
+    const q = overrideQuery ?? query;
+    if (mode === "FOOD") {
+      if (!q.trim()) return toast.error("请输入菜名或粘贴抖音链接");
+      if (isVideoLink(q)) {
+        const foodName = extractFoodName(q);
+        if (foodName) {
+          setQuery(foodName);
+          toast.success(`检测到菜名「${foodName}」，正在分析...`, { duration: 3000 });
+          analyzeMutation.mutate({ mode, textHint: foodName });
+        } else {
+          setShowLinkHint(true);
+          toast("未能自动识别菜名，请手动输入菜名", { duration: 4000 });
+        }
+        return;
+      }
     }
-    analyzeMut.mutate({ mode, textHint: textHint || undefined, imageBase64: imageBase64 || undefined });
+    if (mode === "HEALTH" && !q.trim()) return toast.error("请输入查询内容");
+    analyzeMutation.mutate({ mode, textHint: q || undefined });
   };
 
-  const handleReset = () => { setImageBase64(null); setTextHint(""); setResult(null); };
-
-  const scoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600";
-    if (score >= 60) return "text-amber-600";
-    return "text-red-600";
+  const reset = () => {
+    setResult(null);
+    setQuery("");
+    setShowLinkHint(false);
   };
 
-  const scoreBg = (score: number) => {
-    if (score >= 80) return "from-green-50 to-green-100 border-green-200";
-    if (score >= 60) return "from-amber-50 to-amber-100 border-amber-200";
-    return "from-red-50 to-red-100 border-red-200";
-  };
+  const currentMode = MODES.find((m) => m.id === mode);
 
-  const levelColor = (level: string) => {
-    if (level.includes("推荐") || level.includes("可以")) return "bg-green-100 text-green-700 border-green-200";
-    if (level.includes("适量")) return "bg-amber-100 text-amber-700 border-amber-200";
-    return "bg-red-100 text-red-700 border-red-200";
-  };
+  return (
+    <div className="min-h-screen bg-stone-50 pb-20">
+      <InsufficientCreditsModal
+        isOpen={showCreditsModal}
+        onClose={() => setShowCreditsModal(false)}
+        currentCredits={creditsData?.credits}
+        requiredCredits={1}
+      />
 
-  // Render result based on mode
-  const renderFoodResult = () => {
-    if (!result) return null;
-    return (
-      <div className="space-y-4 animate-slide-up">
-        {/* Image */}
-        {(imageBase64 || result.imageUrl) && (
-          <div className="rounded-2xl overflow-hidden shadow-md">
-            <img
-              src={imageBase64 || result.imageUrl}
-              alt={result.title}
-              className="w-full aspect-[16/10] object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          </div>
-        )}
+      <header className="bg-white px-4 py-4 flex items-center justify-between shadow-sm sticky top-0 z-10">
+        <button
+          onClick={() => { if (mode) { setMode(null); reset(); } else window.history.back(); }}
+          className="flex items-center gap-1 text-stone-600 font-medium"
+        >
+          <ArrowLeft className="w-5 h-5" /> {mode ? "换个功能" : "返回"}
+        </button>
+        <h1 className="text-lg font-bold font-serif text-stone-800">🌿 生活助手</h1>
+        <div className="w-16" />
+      </header>
 
-        {/* Title */}
-        <Card>
-          <CardContent className="pt-4">
-            <h2 className="text-xl font-bold">{result.title || "菜谱"}</h2>
-            {result.tags && result.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {result.tags.map((tag, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs">#{tag}</Badge>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Description */}
-        {result.description && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-2">{"\u{1F4DD}"} 菜品介绍</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">{result.description}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Ingredients with quantities */}
-        {result.ingredients && result.ingredients.length > 0 && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-3">{"\u{1F9D1}\u200D\u{1F373}"} 所需原料</p>
-              <div className="grid grid-cols-2 gap-2">
-                {result.ingredients.map((ing, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-orange-50 border border-orange-100">
-                    <span className="text-orange-500 text-sm">{"\u{2022}"}</span>
-                    <span className="text-sm">{ing}</span>
+      <div className="max-w-lg mx-auto px-4 py-5 space-y-5">
+        {/* 模式选择 */}
+        {!mode && (
+          <>
+            <p className="text-stone-500 text-center text-sm">选择您需要的生活帮助</p>
+            <div className="space-y-3">
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setMode(m.id)}
+                  className={`w-full border-2 rounded-2xl p-4 text-left flex items-center gap-4 hover:scale-[1.01] active:scale-[0.99] transition-all ${m.color}`}
+                >
+                  <span className="text-4xl">{m.icon}</span>
+                  <div>
+                    <p className="font-bold text-lg text-stone-800">{m.label}</p>
+                    <p className="text-sm text-stone-500 mt-0.5">{m.desc}</p>
+                    <p className="text-xs text-stone-400 mt-1">消耗 1 积分</p>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
-        {/* Cooking Steps */}
-        {result.details && result.details.length > 0 && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-3">{"\u{1F468}\u200D\u{1F373}"} 烹饪步骤</p>
-              <ol className="space-y-3">
-                {result.details.map((d, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                    <span className="text-sm leading-relaxed">{d}</span>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
-        )}
+        {/* 查询界面 */}
+        {mode && !result && (
+          <>
+            <div className={`border rounded-2xl p-3 text-center ${currentMode?.color}`}>
+              <p className="text-stone-600 text-sm">
+                {mode === "FOOD" && "📊 输入菜名，AI分析营养成分、健康评分和中老年注意事项（在抖音看到的菜，粘贴链接后输入菜名即可）"}
+                {mode === "HEALTH" && "💊 查询健康知识，了解症状与日常保健方法"}
+              </p>
+            </div>
 
-        {/* Cooking Tips */}
-        {result.advice && (
-          <Card className="border-green-200 bg-green-50/50">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-green-700 mb-1">{"\u{1F4A1}"} 烹饪小贴士</p>
-              <p className="text-sm text-green-600 leading-relaxed">{result.advice}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-  const renderHealthResult = () => {
-    if (!result) return null;
-    return (
-      <div className="space-y-4 animate-slide-up">
-        {/* Image */}
-        {(imageBase64 || result.imageUrl) && (
-          <div className="rounded-2xl overflow-hidden shadow-md">
-            <img
-              src={imageBase64 || result.imageUrl}
-              alt={result.title}
-              className="w-full aspect-[16/10] object-cover"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          </div>
-        )}
-
-        {/* Title + Score */}
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <h2 className="text-xl font-bold">{result.title || "分析结果"}</h2>
-                {result.tags && result.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {result.tags.map((tag, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">#{tag}</Badge>
-                    ))}
-                  </div>
+            {/* 文字输入 */}
+            <div>
+              <p className="font-semibold text-stone-700 mb-2">
+                {mode === "FOOD" ? "🍽️ 请输入菜名" : "请输入健康问题"}
+              </p>
+              <div className="flex gap-2">
+                {mode === "HEALTH" ? (
+                  <Textarea
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="例如：血压偏高怎么办？膝盖疼痛是什么原因？老年人如何补钙？"
+                    className="flex-1 rounded-xl text-base resize-none"
+                    rows={3}
+                  />
+                ) : (
+                  <Input
+                    value={query}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setQuery(val);
+                      if (isVideoLink(val)) {
+                        const foodName = extractFoodName(val);
+                        if (foodName) {
+                          setQuery(foodName);
+                          setShowLinkHint(false);
+                          toast.success(`检测到菜名「${foodName}」，正在分析...`, { duration: 3000 });
+                          analyzeMutation.mutate({ mode: "FOOD", textHint: foodName });
+                        } else {
+                          setShowLinkHint(true);
+                        }
+                      } else {
+                        setShowLinkHint(false);
+                      }
+                    }}
+                    placeholder="输入菜名或粘贴抖音分享链接..."
+                    className="flex-1 rounded-xl text-base"
+                    onKeyDown={(e) => e.key === "Enter" && handleQuery()}
+                  />
                 )}
+                <VoiceInput onResult={(t) => setQuery((q) => q + t)} />
               </div>
-              {result.healthyScore !== undefined && (
-                <div className={`text-center px-3 py-1 rounded-xl bg-gradient-to-b border ${scoreBg(result.healthyScore)}`}>
-                  <p className={`text-3xl font-bold ${scoreColor(result.healthyScore)}`}>{result.healthyScore}</p>
-                  <p className="text-xs text-muted-foreground">健康指数</p>
+              {/* 抖音链接提示 */}
+              {mode === "FOOD" && showLinkHint && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <p className="text-sm text-amber-700 font-medium">💡 检测到抖音链接</p>
+                  <p className="text-xs text-amber-600 mt-1">请在下方输入您看到的菜名，例如"椒烧鲈鱼"，AI将直接分析该菜的营养和健康指数</p>
+                  <Input
+                    className="mt-2 rounded-xl text-base"
+                    placeholder="输入您在抖音上看到的菜名..."
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                        const foodName = e.currentTarget.value.trim();
+                        setQuery(foodName);
+                        setShowLinkHint(false);
+                        analyzeMutation.mutate({ mode: "FOOD", textHint: foodName });
+                      }
+                    }}
+                    onChange={(e) => {
+                      if (e.target.value.trim()) setShowLinkHint(false);
+                    }}
+                  />
+                  <p className="text-xs text-amber-500 mt-1">输入菜名后按回车即可分析</p>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Description */}
-        {result.description && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-2">{"\u{1F4DD}"} 营养概述</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">{result.description}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Nutrition Grid */}
-        {result.nutrition && Object.keys(result.nutrition).length > 0 && (
-          <div className="grid grid-cols-2 gap-2">
-            {Object.entries(result.nutrition).map(([key, val]) => {
-              const label = NUTRITION_LABELS[key] || key;
-              const icon = NUTRITION_ICONS[key] || "\u{1F4CB}";
-              const bg = NUTRITION_COLORS[key] || "bg-gray-50 border-gray-100";
-              return (
-                <div key={key} className={`text-center p-3 rounded-xl border ${bg}`}>
-                  <p className="text-xs text-muted-foreground">{icon} {label}</p>
-                  <p className="text-lg font-bold mt-1">{val}</p>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Details */}
-        {result.details && result.details.length > 0 && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-3">{"\u{1F4CB}"} 详细分析</p>
-              <ol className="space-y-3">
-                {result.details.map((d, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                    <span className="text-sm leading-relaxed">{d}</span>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Chronic Disease Warnings */}
-        {result.chronicDiseaseWarnings && result.chronicDiseaseWarnings.length > 0 && (
-          <Card className="border-amber-200">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-3 flex items-center gap-1">
-                <AlertTriangle className="w-4 h-4 text-amber-500" /> 慢病风险提示
-              </p>
-              <div className="space-y-2">
-                {result.chronicDiseaseWarnings.map((w, i) => (
-                  <div key={i} className="flex items-start gap-2 p-2.5 rounded-lg bg-muted/50">
-                    <Badge variant="outline" className={`shrink-0 text-xs ${levelColor(w.level)}`}>
-                      {w.level}
-                    </Badge>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{w.disease}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{w.reason}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Advice */}
-        {result.advice && (
-          <Card className="border-green-200 bg-green-50/50">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-green-700 mb-1">{"\u{1F468}\u200D\u2695\uFE0F"} 专家健康建议</p>
-              <p className="text-sm text-green-600 leading-relaxed">{result.advice}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-  const renderPlantResult = () => {
-    if (!result) return null;
-    return (
-      <div className="space-y-4 animate-slide-up">
-        {/* Image */}
-        {imageBase64 && (
-          <div className="rounded-2xl overflow-hidden shadow-md">
-            <img src={imageBase64} alt={result.title} className="w-full aspect-[16/10] object-cover" />
-          </div>
-        )}
-
-        {/* Title */}
-        <Card>
-          <CardContent className="pt-4">
-            <h2 className="text-xl font-bold">{result.title || "识别结果"}</h2>
-            {result.scientificName && (
-              <p className="text-sm text-muted-foreground mt-0.5">{result.scientificName}</p>
-            )}
-            {result.family && (
-              <p className="text-xs text-muted-foreground">科属：{result.family}</p>
-            )}
-            {result.tags && result.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {result.tags.map((tag, i) => (
-                  <Badge key={i} variant="secondary" className="text-xs">#{tag}</Badge>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Description */}
-        {result.description && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-2">{"\u{1F4DD}"} 植物简介</p>
-              <p className="text-sm leading-relaxed text-muted-foreground">{result.description}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Flower Language */}
-        {result.flowerLanguage && (
-          <Card className="border-pink-200 bg-pink-50/50">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-pink-700 mb-1 flex items-center gap-1">
-                <Flower2 className="w-4 h-4" /> 花语与寓意
-              </p>
-              <p className="text-sm text-pink-600 leading-relaxed">{result.flowerLanguage}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {result.culturalMeaning && (
-          <Card className="border-purple-200 bg-purple-50/50">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-purple-700 mb-1 flex items-center gap-1">
-                <Leaf className="w-4 h-4" /> 文化含义
-              </p>
-              <p className="text-sm text-purple-600 leading-relaxed">{result.culturalMeaning}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Care Tips */}
-        {result.details && result.details.length > 0 && (
-          <Card>
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold mb-3">{"\u{1F331}"} 养护要点</p>
-              <ol className="space-y-3">
-                {result.details.map((d, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="shrink-0 w-6 h-6 bg-primary/10 text-primary rounded-full flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                    <span className="text-sm leading-relaxed">{d}</span>
-                  </li>
-                ))}
-              </ol>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Advice */}
-        {result.advice && (
-          <Card className="border-green-200 bg-green-50/50">
-            <CardContent className="pt-4">
-              <p className="text-sm font-semibold text-green-700 mb-1">{"\u{1F33F}"} 养护建议</p>
-              <p className="text-sm text-green-600 leading-relaxed">{result.advice}</p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-background">
-      <ModuleHeader title="乐龄生活助手" icon={"\u{1F33F}"} onBack={() => setLocation("/")} />
-
-      <div className="container py-6 space-y-4">
-        {/* Tab Selection */}
-        <div className="grid grid-cols-3 gap-2">
-          {TABS.map(tab => (
             <Button
-              key={tab.id}
-              variant={mode === tab.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => { setMode(tab.id); handleReset(); }}
-              className="h-auto py-2.5 gap-1.5"
+              onClick={() => handleQuery()}
+              disabled={analyzeMutation.isPending || (mode === "FOOD" && !query.trim()) || (mode === "HEALTH" && !query.trim())}
+              className={`w-full rounded-xl py-3 text-base gap-2 text-white ${currentMode?.btnColor}`}
             >
-              <span>{tab.icon}</span>
-              <span className="text-xs">{tab.label}</span>
-            </Button>
-          ))}
-        </div>
-
-        {/* Image Upload */}
-        <ImageUploader
-          onImageSelected={(b64) => { setImageBase64(b64); setResult(null); }}
-          currentImage={imageBase64}
-          onClear={() => { setImageBase64(null); setResult(null); }}
-        />
-
-        {/* Text Input */}
-        <div className="flex gap-2">
-          <Input
-            value={textHint}
-            onChange={e => setTextHint(e.target.value)}
-            placeholder={
-              mode === "PLANT" ? "输入花名或描述特征..." :
-              mode === "FOOD" ? "输入菜名，如：椒烧鲈鱼..." :
-              "输入食品名称，如：红烧肉..."
-            }
-            className="flex-1"
-            onKeyDown={e => { if (e.key === "Enter") handleAnalyze(); }}
-          />
-          <VoiceButton onResult={setTextHint} />
-        </div>
-
-        {/* Analyze Button */}
-        <Button className="w-full h-12 text-base" onClick={handleAnalyze} disabled={analyzeMut.isPending}>
-          {analyzeMut.isPending ? (
-            <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> 正在分析中...</>
-          ) : (
-            <><Search className="w-5 h-5 mr-2" />
-              {mode === "PLANT" ? "开始识别" : mode === "FOOD" ? "查询菜谱" : "分析健康指数"}
-            </>
-          )}
-        </Button>
-
-        {/* Mode-specific Result Display */}
-        {result && (
-          <>
-            {mode === "FOOD" && renderFoodResult()}
-            {mode === "HEALTH" && renderHealthResult()}
-            {mode === "PLANT" && renderPlantResult()}
-
-            {/* Continue Button */}
-            <Button variant="outline" className="w-full h-11" onClick={handleReset}>
-              <Search className="w-4 h-4 mr-2" /> 查下一个
+              {analyzeMutation.isPending ? (
+                <><Loader2 className="w-5 h-5 animate-spin" /> 分析中...</>
+              ) : (
+                <><Search className="w-5 h-5" />
+                  {mode === "FOOD" ? "分析美食健康指数" : "查询健康知识"}（消耗1积分）
+                </>
+              )}
             </Button>
           </>
+        )}
+
+        {/* 结果展示 */}
+        {result && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-stone-700">✅ 分析结果</p>
+              <button onClick={reset} className="text-sm text-stone-500 underline">重新查询</button>
+            </div>
+
+            {/* 生成的图片 */}
+            {result.generatedImageUrl && (
+              <img src={result.generatedImageUrl} className="w-full rounded-2xl shadow-sm" alt={result.title} />
+            )}
+
+            <div className="bg-white border border-stone-200 rounded-2xl p-4 space-y-3">
+              {result.title && <h3 className="text-lg font-bold text-stone-800">{result.title}</h3>}
+              {result.description && <p className="text-stone-600 text-sm leading-relaxed">{result.description}</p>}
+
+              {/* 标签 */}
+              {result.tags && result.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {result.tags.map((tag, i) => (
+                    <span key={i} className="bg-stone-100 text-stone-600 text-xs px-2 py-1 rounded-full">{tag}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* 健康评分 */}
+              {result.healthyScore !== undefined && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-stone-500">健康评分：</span>
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <div key={s} className={`w-4 h-4 rounded-full ${s <= Math.round(result.healthyScore! / 20) ? "bg-green-500" : "bg-stone-200"}`} />
+                    ))}
+                  </div>
+                  <span className="text-sm font-bold text-green-600">{result.healthyScore}/100</span>
+                </div>
+              )}
+
+              {/* 食材列表 */}
+              {result.ingredients && result.ingredients.length > 0 && (
+                <div>
+                  <p className="font-semibold text-stone-700 mb-1.5 text-sm">{mode === "FOOD" ? "主要食材" : "所需食材"}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.ingredients.map((ing, i) => (
+                      <span key={i} className="bg-orange-50 border border-orange-200 text-orange-700 text-xs px-2 py-1 rounded-full">{ing}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 详细信息 */}
+              {result.details && result.details.length > 0 && (
+                <div>
+                  <p className="font-semibold text-stone-700 mb-2 text-sm">
+                    {mode === "FOOD" ? "主要食材营养" : "详细信息"}
+                  </p>
+                  <ol className="space-y-2">
+                    {result.details.map((step, i) => (
+                      <li key={i} className="flex gap-2 text-sm text-stone-600">
+                        {mode !== "FOOD" && <span className="w-5 h-5 bg-orange-100 text-orange-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">{i + 1}</span>}
+                        <span className="leading-relaxed">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+
+              {/* 营养信息 */}
+              {result.nutrition && (
+                <div>
+                  <p className="font-semibold text-stone-700 mb-2 text-sm">营养成分</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(result.nutrition).map(([key, val]) => (
+                      <div key={key} className="bg-blue-50 rounded-xl p-2 text-center">
+                        <p className="text-xs text-stone-500">{key === "calories" ? "热量" : key === "protein" ? "蛋白质" : key === "fat" ? "脂肪" : key === "carbs" ? "碳水" : key === "sodium" ? "钠含量" : key === "sugar" ? "糖分" : key}</p>
+                        <p className="font-bold text-blue-700 text-sm">{val}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 健康建议 */}
+              {result.advice && (
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                  <p className="text-sm text-green-700 leading-relaxed">💡 {result.advice}</p>
+                </div>
+              )}
+            </div>
+
+            {mode === "HEALTH" && (
+              <p className="text-xs text-stone-400 text-center">⚠️ 以上内容仅供参考，如有健康问题请及时就医</p>
+            )}
+          </div>
         )}
       </div>
     </div>

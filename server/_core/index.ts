@@ -1,4 +1,4 @@
-import "./loadEnv";
+import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -43,29 +43,6 @@ async function startServer() {
       createContext,
     })
   );
-  // Proxy endpoint for R2 assets (avoids CORS issues for MP4 export)
-  app.get("/api/asset-proxy", async (req, res) => {
-    const url = req.query.url as string;
-    if (!url || !/^https?:\/\//i.test(url)) {
-      res.status(400).send("Missing or invalid url parameter");
-      return;
-    }
-    try {
-      const upstream = await fetch(url);
-      if (!upstream.ok) {
-        res.status(upstream.status).send("Upstream fetch failed");
-        return;
-      }
-      const contentType = upstream.headers.get("content-type") || "application/octet-stream";
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      const buffer = Buffer.from(await upstream.arrayBuffer());
-      res.send(buffer);
-    } catch {
-      res.status(502).send("Failed to fetch asset");
-    }
-  });
-
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -80,9 +57,12 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, "0.0.0.0", () => {
+  // 延长服务器超时，支持TTS和图片生成等长时间操作（3分钟）
+  server.timeout = 180000;
+  server.keepAliveTimeout = 180000;
+  server.headersTimeout = 185000;
+  server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    console.log(`LAN access: http://192.168.10.139:${port}/`);
   });
 }
 

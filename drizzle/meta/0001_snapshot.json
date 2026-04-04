@@ -1,11 +1,11 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "10a436c8-99f8-4740-bc56-b1154a499de4",
-  "prevId": "ec7bfe46-7a47-408d-9e72-c448d9d1a9ed",
+  "id": "130e1eac-a761-41fc-bf1f-2d09864002fe",
+  "prevId": "7dec7e7d-ae07-4487-a18a-975c6d200a93",
   "tables": {
-    "chat_conversations": {
-      "name": "chat_conversations",
+    "ai_models": {
+      "name": "ai_models",
       "columns": {
         "id": {
           "name": "id",
@@ -14,145 +14,16 @@
           "notNull": true,
           "autoincrement": true
         },
-        "userId": {
-          "name": "userId",
-          "type": "int",
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "title": {
-          "name": "title",
-          "type": "varchar(256)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "chat_conversations_id": {
-          "name": "chat_conversations_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "chat_messages": {
-      "name": "chat_messages",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "conversationId": {
-          "name": "conversationId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "role": {
-          "name": "role",
-          "type": "enum('user','assistant')",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "imageUrl": {
-          "name": "imageUrl",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "chat_messages_id": {
-          "name": "chat_messages_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "model_configs": {
-      "name": "model_configs",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "configKey": {
-          "name": "configKey",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "label": {
-          "name": "label",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider": {
-          "name": "provider",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "modelName": {
-          "name": "modelName",
-          "type": "varchar(128)",
+        "displayName": {
+          "name": "displayName",
+          "type": "varchar(200)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -161,30 +32,30 @@
           "name": "apiKey",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "baseUrl": {
           "name": "baseUrl",
-          "type": "varchar(512)",
+          "type": "varchar(500)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
-        "extraParams": {
-          "name": "extraParams",
-          "type": "json",
+        "modelName": {
+          "name": "modelName",
+          "type": "varchar(200)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
-        "isActive": {
-          "name": "isActive",
-          "type": "boolean",
+        "enabled": {
+          "name": "enabled",
+          "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": true
+          "default": 1
         },
         "createdAt": {
           "name": "createdAt",
@@ -207,25 +78,25 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "model_configs_id": {
-          "name": "model_configs_id",
+        "ai_models_id": {
+          "name": "ai_models_id",
           "columns": [
             "id"
           ]
         }
       },
       "uniqueConstraints": {
-        "model_configs_configKey_unique": {
-          "name": "model_configs_configKey_unique",
+        "ai_models_name_unique": {
+          "name": "ai_models_name_unique",
           "columns": [
-            "configKey"
+            "name"
           ]
         }
       },
       "checkConstraint": {}
     },
-    "points_log": {
-      "name": "points_log",
+    "credit_transactions": {
+      "name": "credit_transactions",
       "columns": {
         "id": {
           "name": "id",
@@ -250,23 +121,30 @@
         },
         "type": {
           "name": "type",
-          "type": "enum('consume','recharge','gift','register')",
+          "type": "enum('consume','recharge','register')",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
-          "type": "varchar(256)",
+        "feature": {
+          "name": "feature",
+          "type": "varchar(100)",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "operatorId": {
-          "name": "operatorId",
-          "type": "int",
+        "description": {
+          "name": "description",
+          "type": "text",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "balanceAfter": {
+          "name": "balanceAfter",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         },
         "createdAt": {
@@ -281,8 +159,8 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "points_log_id": {
-          "name": "points_log_id",
+        "credit_transactions_id": {
+          "name": "credit_transactions_id",
           "columns": [
             "id"
           ]
@@ -291,8 +169,8 @@
       "uniqueConstraints": {},
       "checkConstraint": {}
     },
-    "stories": {
-      "name": "stories",
+    "customer_info": {
+      "name": "customer_info",
       "columns": {
         "id": {
           "name": "id",
@@ -308,40 +186,32 @@
           "notNull": true,
           "autoincrement": false
         },
-        "title": {
-          "name": "title",
-          "type": "varchar(256)",
+        "wechatId": {
+          "name": "wechatId",
+          "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
-        "characterName": {
-          "name": "characterName",
-          "type": "varchar(64)",
+        "phone": {
+          "name": "phone",
+          "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
-        "theme": {
-          "name": "theme",
-          "type": "varchar(64)",
+        "notes": {
+          "name": "notes",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
-        "pageCount": {
-          "name": "pageCount",
-          "type": "int",
+        "tags": {
+          "name": "tags",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 4
-        },
-        "pages": {
-          "name": "pages",
-          "type": "json",
-          "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "createdAt": {
@@ -351,44 +221,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "stories_id": {
-          "name": "stories_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraint": {}
-    },
-    "system_settings": {
-      "name": "system_settings",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "settingKey": {
-          "name": "settingKey",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "settingValue": {
-          "name": "settingValue",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
         },
         "updatedAt": {
           "name": "updatedAt",
@@ -403,97 +235,21 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {
-        "system_settings_id": {
-          "name": "system_settings_id",
+        "customer_info_id": {
+          "name": "customer_info_id",
           "columns": [
             "id"
           ]
         }
       },
       "uniqueConstraints": {
-        "system_settings_settingKey_unique": {
-          "name": "system_settings_settingKey_unique",
+        "customer_info_userId_unique": {
+          "name": "customer_info_userId_unique",
           "columns": [
-            "settingKey"
+            "userId"
           ]
         }
       },
-      "checkConstraint": {}
-    },
-    "user_api_configs": {
-      "name": "user_api_configs",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "configKey": {
-          "name": "configKey",
-          "type": "varchar(64)",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "modelName": {
-          "name": "modelName",
-          "type": "varchar(128)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "apiKey": {
-          "name": "apiKey",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "baseUrl": {
-          "name": "baseUrl",
-          "type": "varchar(512)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "user_api_configs_id": {
-          "name": "user_api_configs_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
       "checkConstraint": {}
     },
     "users": {
@@ -542,21 +298,13 @@
           "autoincrement": false,
           "default": "'user'"
         },
-        "points": {
-          "name": "points",
+        "credits": {
+          "name": "credits",
           "type": "int",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 100
-        },
-        "isFrozen": {
-          "name": "isFrozen",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
         },
         "createdAt": {
           "name": "createdAt",

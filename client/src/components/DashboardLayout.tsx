@@ -19,7 +19,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { canUseDevLogin, loginInDevMode, redirectToLogin } from "@/const";
+import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -46,7 +46,7 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user, refresh } = useAuth();
+  const { loading, user } = useAuth();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -68,24 +68,9 @@ export default function DashboardLayout({
               Access to this dashboard requires authentication. Continue to launch the login flow.
             </p>
           </div>
-          {canUseDevLogin() && (
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                const ok = await loginInDevMode();
-                if (ok) {
-                  await refresh();
-                }
-              }}
-              size="lg"
-              className="w-full"
-            >
-              开发登录
-            </Button>
-          )}
           <Button
             onClick={() => {
-              redirectToLogin();
+              window.location.href = getLoginUrl();
             }}
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"

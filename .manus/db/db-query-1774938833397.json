@@ -1,9 +1,0 @@
-{
-  "query": "INSERT INTO system_settings (settingKey, settingValue) VALUES \n('default_points', '100'),\n('points_per_use', '1'),\n('recharge_ratio', '1');\n\nINSERT INTO model_configs (configKey, label, provider, modelName, apiKey, baseUrl) VALUES \n('text_generation', '文本生成模型', 'google_proxy', 'gemini-3.1-flash-lite-preview', '', 'https://api.gdoubolai.com/v1'),\n('image_processing', '图像处理模型', 'google_proxy', 'gemini-3.1-flash-image-preview', '', 'https://api.gdoubolai.com/v1'),\n('tts', '语音合成模型', 'minimax', 'speech-02-hd', '', 'https://api.minimaxi.com/v1'),\n('image_generation', '图像生成模型', 'minimax', 'image-01', '', 'https://api.minimaxi.com/v1'),\n('kimi', 'Kimi文本模型', 'kimi', 'moonshot-v1-8k', '', 'https://api.moonshot.cn/v1');",
-  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user qf4W4Hatupw26PV.root --database FL55Eub6nFftzszZA77BVq --execute INSERT INTO system_settings (settingKey, settingValue) VALUES \n('default_points', '100'),\n('points_per_use', '1'),\n('recharge_ratio', '1');\n\nINSERT INTO model_configs (configKey, label, provider, modelName, apiKey, baseUrl) VALUES \n('text_generation', '文本生成模型', 'google_proxy', 'gemini-3.1-flash-lite-preview', '', 'https://api.gdoubolai.com/v1'),\n('image_processing', '图像处理模型', 'google_proxy', 'gemini-3.1-flash-image-preview', '', 'https://api.gdoubolai.com/v1'),\n('tts', '语音合成模型', 'minimax', 'speech-02-hd', '', 'https://api.minimaxi.com/v1'),\n('image_generation', '图像生成模型', 'minimax', 'image-01', '', 'https://api.minimaxi.com/v1'),\n('kimi', 'Kimi文本模型', 'kimi', 'moonshot-v1-8k', '', 'https://api.moonshot.cn/v1');",
-  "rows": [],
-  "messages": [],
-  "stdout": "",
-  "stderr": "",
-  "execution_time_ms": 545
-}
