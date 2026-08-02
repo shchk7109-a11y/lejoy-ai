@@ -345,6 +345,26 @@ describe("M3 万花筒合规聊天 REST 接口", () => {
     expect(checkTextSecurity).toHaveBeenCalledWith(expect.stringContaining("历史违规内容"), "mp-openid");
   });
 
+  it("长历史和超长模型回复按微信 2500 字限制分批送检", async () => {
+    const checkTextSecurity = vi.fn(async () => ({ safe: true }));
+    const longReply = "日常常识".repeat(700);
+    const deps = dependencies({
+      checkTextSecurity,
+      aiChatMulti: vi.fn(async () => longReply),
+    });
+    const baseUrl = await startApp(deps);
+    const history = Array.from({ length: 12 }, (_, index) => ({
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: `${index}`.padEnd(500, "天气常识"),
+    }));
+    const response = await post(baseUrl, "/chat", { message: "继续聊节气常识", history });
+
+    expect(response.status).toBe(200);
+    const checkedTexts = checkTextSecurity.mock.calls.map(([text]) => text);
+    expect(checkedTexts.length).toBeGreaterThanOrEqual(6);
+    expect(checkedTexts.every((text) => text.length <= 2500)).toBe(true);
+  });
+
   it("模型输出包含药名或剂量时过滤为就医引导并退分", async () => {
     const consume = vi.fn(async () => 99);
     const refund = vi.fn(async () => 100);

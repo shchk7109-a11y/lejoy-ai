@@ -20,6 +20,7 @@ import { appendChatDisclaimer, blocksChatInput, blocksChatOutput } from "./chat-
 import { CHAT_MEDICAL_GUIDANCE, CHAT_SYSTEM_PROMPT } from "./chat-persona";
 import { createMediaCheckTask, findMediaCheckTaskByFile } from "./media-check-tasks";
 import { checkMediaSecurity, checkTextSecurity, type MediaSecuritySubmission, type SecurityCheckResult } from "./security";
+import { createTextSecurityBatches } from "./text-security-batches";
 
 type StoredFile = { key: string; url: string };
 type StoryResult = Awaited<ReturnType<typeof generateStoryText>>;
@@ -87,6 +88,14 @@ function nonEmpty(value: unknown): string {
 export function createM3Router(deps: M3Dependencies, authenticate: RequestHandler): Router {
   const router = Router();
   router.use(authenticate);
+
+  const checkTextBatches = async (texts: string[], openId: string): Promise<SecurityCheckResult> => {
+    for (const batch of createTextSecurityBatches(texts)) {
+      const result = await deps.checkTextSecurity(batch, openId);
+      if (!result.safe) return result;
+    }
+    return { safe: true };
+  };
 
   const submitStoredImage = async (file: StoredFile, user: { id: number; openId: string }) => {
     if (deps.contentSecurityMode !== "wechat") return "bypassed" as const;
@@ -323,15 +332,15 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     }
     const safeHistory = history.slice(-12) as Array<{ role: "user" | "assistant"; content: string }>;
     const user = (req as MpAuthenticatedRequest).mpUser;
-    const inputCheck = await deps.checkTextSecurity(message, user.openId);
+    const inputCheck = await checkTextBatches([message], user.openId);
     if (!inputCheck.safe) {
       res.status(422).json({ error: { code: "CONTENT_REJECTED", message: inputCheck.reason ?? "输入内容未通过安全检查" } });
       return;
     }
 
     if (safeHistory.length > 0) {
-      const historyCheck = await deps.checkTextSecurity(
-        safeHistory.map((item) => `${item.role === "user" ? "用户" : "助手"}：${item.content}`).join("\n"),
+      const historyCheck = await checkTextBatches(
+        safeHistory.map((item) => `${item.role === "user" ? "用户" : "助手"}：${item.content}`),
         user.openId,
       );
       if (!historyCheck.safe) {
@@ -345,7 +354,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     ));
     if (blocksChatInput(message) || historyHitsRedLine) {
       const reply = appendChatDisclaimer(CHAT_MEDICAL_GUIDANCE);
-      const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+      const outputCheck = await checkTextBatches([reply], user.openId);
       if (!outputCheck.safe) {
         res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "回复内容未通过安全检查" } });
         return;
@@ -367,7 +376,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
           });
           if (blocksChatOutput(generated)) throw new ChatOutputBlockedError();
           const reply = appendChatDisclaimer(generated);
-          const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+          const outputCheck = await checkTextBatches([reply], user.openId);
           if (!outputCheck.safe) throw new ChatContentRejectedError(outputCheck.reason ?? "回复内容未通过安全检查");
           return reply;
         },
@@ -377,7 +386,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     } catch (error) {
       if (error instanceof ChatOutputBlockedError) {
         const reply = appendChatDisclaimer(CHAT_MEDICAL_GUIDANCE);
-        const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+        const outputCheck = await checkTextBatches([reply], user.openId);
         if (!outputCheck.safe) {
           res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "回复内容未通过安全检查" } });
           return;

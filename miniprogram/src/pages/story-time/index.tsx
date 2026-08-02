@@ -38,6 +38,7 @@ export default function StoryTimePage() {
   const [voiceType, setVoiceType] = useState("lively");
   const [busyMessage, setBusyMessage] = useState("");
   const [illustrating, setIllustrating] = useState(false);
+  const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
   const [playingPage, setPlayingPage] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
 
@@ -75,6 +76,7 @@ export default function StoryTimePage() {
       setStep("result");
       setBusyMessage("");
       setIllustrating(true);
+      setFailedImagePages([]);
       const imageResults = await Promise.all(story.pages.map(async (page) => {
         try {
           const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
@@ -83,6 +85,7 @@ export default function StoryTimePage() {
           )));
           return true;
         } catch {
+          setFailedImagePages((current) => current.includes(page.pageNumber) ? current : [...current, page.pageNumber]);
           return false;
         }
       }));
@@ -151,6 +154,7 @@ export default function StoryTimePage() {
     setTitle("");
     setPages([]);
     setIllustrating(false);
+    setFailedImagePages([]);
     setPlayingPage(undefined);
   }
 
@@ -206,11 +210,13 @@ export default function StoryTimePage() {
         {step === "result" ? (
           <View className="story-result">
             <Text className="story-result__title">{title}</Text>
-            <Text className="story-result__tip">{illustrating ? "四页文字已完成，正在逐页补图…" : "共 4 页，文字和图片已准备好"}</Text>
+            <Text className="story-result__tip">
+              {illustrating ? "四页文字已完成，正在逐页补图…" : failedImagePages.length ? `有 ${failedImagePages.length} 页配图未完成，请重新讲一个故事` : "共 4 页，文字和图片已准备好"}
+            </Text>
             {pages.map((page) => (
               <View key={page.pageNumber} className={`story-card ${playingPage === page.pageNumber ? "story-card--playing" : ""}`}>
                 <Text className="story-card__number">第 {page.pageNumber} 页</Text>
-                {page.imageUrl ? <Image className="story-card__image" src={page.imageUrl} mode="aspectFill" /> : <View className="story-card__placeholder"><Text>正在配图…</Text></View>}
+                {page.imageUrl ? <Image className="story-card__image" src={page.imageUrl} mode="aspectFill" /> : <View className="story-card__placeholder"><Text>{failedImagePages.includes(page.pageNumber) ? "配图未完成" : "正在配图…"}</Text></View>}
                 <Text className="story-card__text">{page.text}</Text>
               </View>
             ))}

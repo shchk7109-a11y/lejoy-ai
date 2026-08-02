@@ -64,6 +64,12 @@ const OUTPUT_DRUG_NAMES = [
   "头孢",
   "青霉素",
   "胰岛素",
+  "华法林",
+  "利伐沙班",
+  "氯吡格雷",
+  "缬沙坦",
+  "厄贝沙坦",
+  "氯沙坦",
 ] as const;
 
 const OUTPUT_RESTRICTED_TOPICS = [
@@ -72,6 +78,10 @@ const OUTPUT_RESTRICTED_TOPICS = [
   "营养补充剂",
   "治疗方案",
   "治疗方法",
+  "灵芝",
+  "孢子粉",
+  "破壁",
+  "提取物",
 ] as const;
 
 const OUTPUT_DOSAGE_PATTERNS = [
