@@ -31,7 +31,10 @@ if [[ -n "${GIT_BUNDLE_PATH}" ]]; then
     printf 'Git bundle 不存在：%s\n' "${GIT_BUNDLE_PATH}" >&2
     exit 1
   fi
-  git bundle verify "${GIT_BUNDLE_PATH}"
+  bundle_verify_dir="$(mktemp -d)"
+  git init --bare "${bundle_verify_dir}" >/dev/null
+  git -C "${bundle_verify_dir}" bundle verify "${GIT_BUNDLE_PATH}"
+  rm -rf -- "${bundle_verify_dir}"
   fetch_source="${GIT_BUNDLE_PATH}"
 fi
 if [[ ! -d "${APP_DIR}/.git" ]]; then

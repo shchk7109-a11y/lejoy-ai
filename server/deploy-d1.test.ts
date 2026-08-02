@@ -34,6 +34,8 @@ describe("D1 部署脚本契约", () => {
     expect(source).toContain("local_revision");
     expect(source).toContain("remote_revision");
     expect(source).toContain("GIT_BUNDLE_PATH");
+    expect(source).toContain("git init --bare");
+    expect(source).toContain('git -C "${bundle_verify_dir}" bundle verify');
     expect(source).toContain('git fetch "${fetch_source}"');
     expect(source).toContain("pnpm install --frozen-lockfile");
     expect(source).toContain("pnpm build");
