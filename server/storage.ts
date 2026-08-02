@@ -1,7 +1,65 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uses the Biz-provided storage proxy (Authorization: Bearer <token>)
+// Storage helpers
+// - 配置了 S3_* 环境变量时：使用阿里云 OSS（S3 兼容）/任意 S3 兼容存储（独立部署用）
+// - 否则回落到 Manus Biz 存储代理（遗留链路）
 
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from './_core/env';
+
+// ─── S3 兼容驱动（阿里云 OSS 等）──────────────────────────────────────────────
+
+function s3Enabled(): boolean {
+  return !!(ENV.s3Bucket && ENV.s3Endpoint && ENV.s3AccessKeyId && ENV.s3SecretAccessKey);
+}
+
+let _s3Client: S3Client | null = null;
+function getS3Client(): S3Client {
+  if (!_s3Client) {
+    _s3Client = new S3Client({
+      region: ENV.s3Region,
+      endpoint: ENV.s3Endpoint,
+      credentials: {
+        accessKeyId: ENV.s3AccessKeyId,
+        secretAccessKey: ENV.s3SecretAccessKey,
+      },
+      // 阿里云 OSS 的 S3 兼容模式建议使用 virtual-hosted style（默认）；
+      // 如使用 MinIO 等需要 path-style，可在此改为 forcePathStyle: true
+    });
+  }
+  return _s3Client;
+}
+
+async function s3PublicUrl(key: string): Promise<string> {
+  if (ENV.s3PublicBaseUrl) {
+    return `${ENV.s3PublicBaseUrl.replace(/\/+$/, "")}/${key}`;
+  }
+  // 未配置公开域名时生成7天有效的签名URL（SigV4上限）。
+  // 注意：生成的图片/视频若需长期访问，建议开公开读桶或配 CDN 域名后设置 S3_PUBLIC_BASE_URL
+  return getSignedUrl(
+    getS3Client(),
+    new GetObjectCommand({ Bucket: ENV.s3Bucket, Key: key }),
+    { expiresIn: 7 * 24 * 3600 }
+  );
+}
+
+async function s3Put(
+  key: string,
+  data: Buffer | Uint8Array | string,
+  contentType: string
+): Promise<{ key: string; url: string }> {
+  const body = typeof data === "string" ? Buffer.from(data) : Buffer.from(data);
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: ENV.s3Bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
+  return { key, url: await s3PublicUrl(key) };
+}
+
+// ─── Manus Biz 存储代理（遗留链路）────────────────────────────────────────────
 
 type StorageConfig = { baseUrl: string; apiKey: string };
 
@@ -72,6 +130,9 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream"
 ): Promise<{ key: string; url: string }> {
+  if (s3Enabled()) {
+    return s3Put(normalizeKey(relKey), data, contentType);
+  }
   const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
   const uploadUrl = buildUploadUrl(baseUrl, key);
@@ -93,8 +154,11 @@ export async function storagePut(
 }
 
 export async function storageGet(relKey: string): Promise<{ key: string; url: string; }> {
-  const { baseUrl, apiKey } = getStorageConfig();
   const key = normalizeKey(relKey);
+  if (s3Enabled()) {
+    return { key, url: await s3PublicUrl(key) };
+  }
+  const { baseUrl, apiKey } = getStorageConfig();
   return {
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),

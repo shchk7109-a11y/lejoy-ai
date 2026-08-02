@@ -9,10 +9,10 @@ import {
   getUserTransactions, getAllAiModels, updateAiModel, upsertAiModel,
   getCustomerInfo, upsertCustomerInfo, getAllCustomerInfo, recordRegisterBonus,
 } from "./db";
-import { callGeminiText, callGeminiImage, callGeminiTTS, cleanJson } from "./geminiService";
-import { analyzeFoodNutrition, generateFoodImage, identifyPlant, queryHealthInfo, invokeMiniMaxImage, invokeMiniMaxTTS, generateStoryText, suggestStoryTopics } from "./minimaxService";
+import { cleanJson } from "./geminiService";
+import { analyzeFoodNutrition, generateFoodImage, queryHealthInfo, generateStoryText, suggestStoryTopics } from "./minimaxService";
+import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from "./ai/gateway";
 import { storagePut } from "./storage";
-import { transcribeAudio } from "./_core/voiceTranscription";
 import { ENV } from "./_core/env";
 
 // ─── 管理员权限中间件 ──────────────────────────────────────────────────────────
@@ -118,8 +118,7 @@ export const appRouter = router({
     transcribe: protectedProcedure
       .input(z.object({ audioUrl: z.string(), language: z.string().default("zh") }))
       .mutation(async ({ input }) => {
-        const result = await transcribeAudio({ audioUrl: input.audioUrl, language: input.language });
-        if ("error" in result) throw new Error(result.error);
+        const result = await aiASR(input.audioUrl, input.language);
         return { text: result.text };
       }),
   }),
@@ -130,13 +129,9 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         await consumeCredits(ctx.user.id, CREDIT_COSTS.photo_restore, "photo_restore", "照片修复");
         const promptText = input.prompt
-          ? `Edit this photo: ${input.prompt}. Keep the result natural and high quality.`
-          : "Improve clarity, lighting, and color balance. Restore damaged or faded areas. Make it look like a professional photo restoration.";
-        const imageResp = await fetch(input.imageUrl);
-        const base64 = Buffer.from(await imageResp.arrayBuffer()).toString("base64");
-        const mimeType = imageResp.headers.get("content-type") ?? "image/jpeg";
-        const result = await callGeminiImage({ parts: [{ inlineData: { data: base64, mimeType } }, { text: promptText }] });
-        const resultData = result.replace(/^data:.*?;base64,/, "");
+          ? `按照以下要求修改这张照片：${input.prompt}。人物面部保持原有特征不变，效果自然真实、高清。`
+          : "修复并增强这张老照片：提升清晰度与光线，修复破损、划痕、噪点与褪色区域，还原自然真实的色彩，人物面部保持原有特征不变，输出专业级照片修复效果。";
+        const resultData = await aiEditImage({ prompt: promptText, imageUrl: input.imageUrl });
         const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
         return { imageUrl: url };
       }),
@@ -146,18 +141,14 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         await consumeCredits(ctx.user.id, CREDIT_COSTS.art_transform, "art_transform", `艺术风格：${input.style}`);
         const stylePrompts: Record<string, string> = {
-          "油画": "Transform this photo into a masterpiece oil painting with rich textures, deep colors, and visible brushstrokes.",
-          "水彩": "Transform this photo into a beautiful watercolor painting with soft washes of color and dreamy quality.",
-          "素描": "Transform this photo into a detailed pencil sketch with fine lines and careful attention to light and shadow.",
-          "水墨画": "Transform this photo into a traditional Chinese ink wash painting with elegant brushstrokes and poetic atmosphere.",
-          "印象派": "Transform this photo into an impressionist painting with loose, vibrant brushstrokes in the style of Monet.",
+          "油画": "把这张照片转换成经典油画风格：厚重的笔触肌理、浓郁的色彩层次，保持人物与构图不变。",
+          "水彩": "把这张照片转换成清新水彩画风格：柔和的色彩晕染、通透梦幻的质感，保持人物与构图不变。",
+          "素描": "把这张照片转换成细腻的铅笔素描风格：清晰的线条、讲究的明暗与光影，保持人物与构图不变。",
+          "水墨画": "把这张照片转换成中国传统水墨画风格：飘逸的笔墨、留白意境、诗意氛围，保持人物与构图不变。",
+          "印象派": "把这张照片转换成莫奈印象派油画风格：松弛而鲜活的笔触、斑斓的光影色彩，保持人物与构图不变。",
         };
-        const stylePrompt = stylePrompts[input.style] ?? `Transform this photo into ${input.style} art style.`;
-        const imageResp = await fetch(input.imageUrl);
-        const base64 = Buffer.from(await imageResp.arrayBuffer()).toString("base64");
-        const mimeType = imageResp.headers.get("content-type") ?? "image/jpeg";
-        const result = await callGeminiImage({ parts: [{ inlineData: { data: base64, mimeType } }, { text: stylePrompt }] });
-        const resultData = result.replace(/^data:.*?;base64,/, "");
+        const stylePrompt = stylePrompts[input.style] ?? `把这张照片转换成${input.style}艺术风格，保持人物与构图不变。`;
+        const resultData = await aiEditImage({ prompt: stylePrompt, imageUrl: input.imageUrl });
         const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
         return { imageUrl: url };
       }),
@@ -168,9 +159,14 @@ export const appRouter = router({
       .input(z.object({ scenario: z.string(), relationship: z.string(), recipientName: z.string().optional(), tone: z.string(), specificHoliday: z.string().optional(), customContext: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
         await consumeCredits(ctx.user.id, CREDIT_COSTS.wish_generate, "wish_generate", "暖心文案");
-        const prompt = `请作为情感细腻的中文文案专家，生成3条不同的祝福语。场景:${input.scenario} 对象:${input.relationship} 收信人:${input.recipientName ?? "对方"} 风格:${input.tone} 节日:${input.specificHoliday ?? "无"} 补充:${input.customContext ?? "无"}。要求：中文，温暖亲切，适合中老年人，每条100字以内。返回JSON数组，只含3个字符串。`;
-        const text = await callGeminiText({ contents: [{ text: prompt }], responseMimeType: "application/json", responseSchema: { type: "ARRAY", items: { type: "STRING" } } });
-        const wishes = JSON.parse(cleanJson(text));
+        const prompt = `请作为情感细腻的中文文案专家，生成3条不同的祝福语。场景:${input.scenario} 对象:${input.relationship} 收信人:${input.recipientName ?? "对方"} 风格:${input.tone} 节日:${input.specificHoliday ?? "无"} 补充:${input.customContext ?? "无"}。要求：中文，温暖亲切，适合中老年人，每条100字以内。返回JSON对象，格式：{"wishes":["祝福语1","祝福语2","祝福语3"]}，不要任何多余文字。`;
+        const text = await aiChat({
+          systemPrompt: "你是情感细腻的中文文案专家，只返回JSON格式内容。",
+          userPrompt: prompt,
+          json: true,
+        });
+        const parsed = JSON.parse(cleanJson(text));
+        const wishes = Array.isArray(parsed) ? parsed : parsed?.wishes;
         return { wishes: Array.isArray(wishes) ? wishes : [text] };
       }),
   }),
@@ -219,8 +215,8 @@ export const appRouter = router({
     generatePageImage: protectedProcedure
       .input(z.object({ imagePrompt: z.string(), pageNumber: z.number() }))
       .mutation(async ({ input, ctx }) => {
-        const base64 = await invokeMiniMaxImage({
-          prompt: `Children's book illustration, warm cute style, colorful, soft lighting, friendly characters. Page ${input.pageNumber}: ${input.imagePrompt}`,
+        const base64 = await aiGenerateImage({
+          prompt: `儿童绘本插画，温暖可爱的风格，色彩明亮柔和，角色友善。第${input.pageNumber}页：${input.imagePrompt}`,
           aspectRatio: "1:1"
         });
         const { url } = await storagePut(`stories/${ctx.user.id}/${Date.now()}-p${input.pageNumber}.png`, Buffer.from(base64, "base64"), "image/png");
@@ -245,7 +241,7 @@ export const appRouter = router({
         const textToSpeak = input.isFirstPage && input.title
           ? `${input.title}。${input.text}`
           : input.text;
-        const { audioData, audioMime } = await invokeMiniMaxTTS(textToSpeak, input.voiceType);
+        const { audioData, audioMime } = await aiTTS(textToSpeak, input.voiceType);
         // 将MIME类型和base64一起返回，前端用于正确播放
         return { audioBase64: audioData, audioMime, pageNumber: input.pageNumber };
       }),
@@ -345,7 +341,7 @@ export const appRouter = router({
             // 如果是文字查询且有标题，生成食物图片
             if (result.title && !input.imageUrl) {
               try {
-                const base64 = await invokeMiniMaxImage({ prompt: `精美的${result.title}，专业食物摄影，高清，白色背景` });
+                const base64 = await aiGenerateImage({ prompt: `精美的${result.title}，专业食物摄影，高清，白色背景` });
                 const { url } = await storagePut(`food/${Date.now()}.png`, Buffer.from(base64, "base64"), "image/png");
                 (result as any).generatedImageUrl = url;
               } catch { /* 图片生成失败不影响主流程 */ }
@@ -424,14 +420,6 @@ export const appRouter = router({
 ㉗ 白芷：《中国药典》记载其解表散寒、活血止痛功效。适应：面色暗沉、色斑、风寒感冒。
 ㉘ 甘草：《中国药典》记载其补脾益气、清热解毒、调和诸药功效。
 `;
-        const contents: any[] = input.history.map((m) => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.content }] }));
-        const currentParts: any[] = [];
-        if (input.imageUrl) {
-          const imageResp = await fetch(input.imageUrl);
-          const base64 = Buffer.from(await imageResp.arrayBuffer()).toString("base64");
-          const mimeType = imageResp.headers.get("content-type") ?? "image/jpeg";
-          currentParts.push({ inlineData: { data: base64, mimeType } });
-        }
         // 隐性结构指令：告诉AI要做什么，但不要让这些指令出现在输出中
         // 内嵌完整的症状→配方成分映射表，确保灵芝+对应成分都能被推荐到
         const forcedSuffix = `
@@ -454,10 +442,12 @@ export const appRouter = router({
 - 咽喉不适/肺部问题/咳嗽：灵芝（益肺气）、蛹虫草（补肺化痰）、罗汉果（清热润肺）、百合（润肺止咳）
 - 关节疼痛/腰腿酸软：灵芝（补肝肾强筋骨）、杜仲（补肝肾）、牛膝（强筋骨）
 - 情绪焦虑/压力大：灵芝（安神定志）、玫瑰花（疏肝解郁）、百合（清心除烦）]`;
-        currentParts.push({ text: input.message + forcedSuffix });
-        contents.push({ role: "user", parts: currentParts });
-
-        const reply = await callGeminiText({ systemInstruction, contents });
+        const reply = await aiChatMulti({
+          systemPrompt: systemInstruction,
+          history: input.history,
+          message: input.message + forcedSuffix,
+          imageUrl: input.imageUrl,
+        });
         return { reply };
       }),
   }),
