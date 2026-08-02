@@ -61,5 +61,7 @@ describe("D1 部署脚本契约", () => {
     expect(source).toContain("/api/mp/health");
     expect(source).toContain("/api/mp/modules");
     expect(source).toContain('--resolve "${DOMAIN}:443:127.0.0.1"');
+    expect(source).toContain("for _attempt in {1..15}");
+    expect(source).toContain("本机 HTTPS 健康检查失败");
   });
 });

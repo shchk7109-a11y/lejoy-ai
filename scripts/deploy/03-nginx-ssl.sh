@@ -130,7 +130,17 @@ NGINX_HTTPS
 nginx -t
 systemctl reload nginx
 
-health="$(curl -fsS --max-time 15 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/mp/health")"
+health=""
+for _attempt in {1..15}; do
+  if health="$(curl -fsS --max-time 5 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/mp/health")"; then
+    break
+  fi
+  sleep 1
+done
+if [[ -z "${health}" ]]; then
+  printf '%s\n' "本机 HTTPS 健康检查失败" >&2
+  exit 1
+fi
 modules_status="$(curl -sS --max-time 15 --resolve "${DOMAIN}:443:127.0.0.1" -o /dev/null -w '%{http_code}' "https://${DOMAIN}/api/mp/modules")"
 if [[ "${modules_status}" != "401" ]]; then
   printf '未鉴权 modules 状态异常：%s\n' "${modules_status}" >&2
