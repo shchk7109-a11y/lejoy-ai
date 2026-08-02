@@ -133,16 +133,19 @@ const productionDependencies: AdminCreditsDependencies = {
   setAdmin,
 };
 
-async function main(): Promise<void> {
+async function main(): Promise<number> {
   try {
     const command = parseAdminCreditsArgs(process.argv.slice(2));
     await runAdminCredits(command, productionDependencies);
+    return 0;
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     console.error(USAGE);
-    process.exitCode = 1;
+    return 1;
   }
 }
 
 const entrypoint = process.argv[1] ? resolve(process.argv[1]) : "";
-if (entrypoint === fileURLToPath(import.meta.url)) void main();
+if (entrypoint === fileURLToPath(import.meta.url)) {
+  void main().then((exitCode) => process.exit(exitCode));
+}

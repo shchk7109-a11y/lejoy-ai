@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 const moduleUrl = new URL("../scripts/admin-credits.ts", import.meta.url);
@@ -9,6 +9,11 @@ async function loadModule() {
 }
 
 describe("管理员积分 CLI 参数", () => {
+  it("命令入口显式退出，避免数据库连接池挂住进程", () => {
+    const source = readFileSync(moduleUrl, "utf8");
+    expect(source).toContain("process.exit(exitCode)");
+  });
+
   it("解析三种受支持命令", async () => {
     const { parseAdminCreditsArgs } = await loadModule();
 

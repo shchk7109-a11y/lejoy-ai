@@ -8,6 +8,15 @@ function deployFile(name: string): string {
 }
 
 describe("D1 部署脚本契约", () => {
+  it("仓库根目录暴露任务书指定的小程序构建命令", () => {
+    const packageJson = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8")
+    ) as { scripts?: Record<string, string> };
+    expect(packageJson.scripts?.["build:weapp"]).toBe(
+      "pnpm --dir miniprogram build:weapp"
+    );
+  });
+
   it("01-init 初始化系统、数据库密钥与 2G swap", () => {
     const source = deployFile("01-init.sh");
     expect(source).toContain("set -Eeuo pipefail");
