@@ -48,7 +48,7 @@ export function VoiceInput({ onResult }: { onResult: (text: string) => void }) {
     try {
       const base64 = await readBase64(filePath);
       const uploaded = await mpApi.uploadAudio({ base64, mimeType: "audio/mpeg" });
-      const result = await mpApi.transcribeAudio(uploaded.url);
+      const result = await mpApi.transcribeAudio(uploaded.fileKey);
       onResult(result.text);
       await Taro.showToast({ title: "已转成文字", icon: "success" });
     } catch (error) {

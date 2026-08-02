@@ -289,13 +289,16 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   }));
 
   router.post("/stt/transcribe", asyncRoute(async (req, res) => {
-    const audioUrl = typeof req.body?.audioUrl === "string" ? req.body.audioUrl.trim() : "";
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const fileKey = typeof req.body?.fileKey === "string" ? req.body.fileKey.trim() : "";
     const language = typeof req.body?.language === "string" && req.body.language.trim() ? req.body.language.trim() : "zh";
-    if (!audioUrl) {
-      badRequest(res, "audioUrl 不能为空");
+    const ownedVoicePattern = new RegExp(`^voice/${user.id}/[A-Za-z0-9][A-Za-z0-9._-]*\\.mp3$`, "i");
+    if (!ownedVoicePattern.test(fileKey)) {
+      badRequest(res, "请选择当前账号已上传的语音文件");
       return;
     }
-    const result = await deps.aiASR(audioUrl, language);
+    const audio = await deps.storageGet(fileKey);
+    const result = await deps.aiASR(audio.url, language);
     res.json({ text: result.text });
   }));
 

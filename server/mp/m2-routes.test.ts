@@ -223,7 +223,7 @@ describe("M2 小程序 REST 接口", () => {
     expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
-  it("艺术转换只接受五种风格，语音转写不扣积分", async () => {
+  it("艺术转换只接受五种风格，语音转写只使用当前用户上传文件且不扣积分", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);
 
@@ -237,12 +237,36 @@ describe("M2 小程序 REST 接口", () => {
     const stt = await fetch(`${baseUrl}/stt/transcribe`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ audioUrl: "https://cdn.example/audio.mp3" }),
+      body: JSON.stringify({ fileKey: "voice/7/audio.mp3" }),
     });
     expect(stt.status).toBe(200);
     await expect(stt.json()).resolves.toEqual({ text: "这是语音转写文字" });
-    expect(deps.aiASR).toHaveBeenCalledWith("https://cdn.example/audio.mp3", "zh");
+    expect(deps.storageGet).toHaveBeenCalledWith("voice/7/audio.mp3");
+    expect(deps.aiASR).toHaveBeenCalledWith("https://cdn.example/voice/7/audio.mp3", "zh");
     expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
+
+  it("语音转写拒绝任意外部 URL、其他用户文件与非法前缀", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const bodies = [
+      { audioUrl: "https://attacker.example/paid.mp3" },
+      { fileKey: "voice/8/audio.mp3" },
+      { fileKey: "uploads/7/audio.mp3" },
+      { fileKey: "voice/7/../8/audio.mp3" },
+    ];
+
+    for (const body of bodies) {
+      const response = await fetch(`${baseUrl}/stt/transcribe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      expect(response.status).toBe(400);
+    }
+
+    expect(deps.storageGet).not.toHaveBeenCalled();
+    expect(deps.aiASR).not.toHaveBeenCalled();
   });
 
   it("上传 mp3 录音供免积分 ASR 使用", async () => {

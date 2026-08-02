@@ -75,6 +75,6 @@ export const mpApi = {
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data }),
   transformPhoto: (data: { sourceFileKey: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }) =>
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data }),
-  transcribeAudio: (audioUrl: string) =>
-    request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { audioUrl, language: "zh" } }),
+  transcribeAudio: (fileKey: string) =>
+    request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { fileKey, language: "zh" } }),
 };
