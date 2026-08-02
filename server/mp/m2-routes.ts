@@ -133,8 +133,8 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
     } catch (error) {
       try {
         await deps.storageDelete(file.key);
-      } catch (deleteError) {
-        console.error("[MP M2 media compensation]", deleteError);
+      } catch {
+        console.error("[MP M2 media compensation] cleanup failed");
       }
       throw error;
     }
@@ -303,7 +303,6 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   }));
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[MP M2 REST]", error);
     if (error instanceof Error && error.message.includes("积分不足")) {
       res.status(402).json({ error: { code: "INSUFFICIENT_CREDITS", message: error.message } });
       return;

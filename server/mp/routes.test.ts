@@ -47,6 +47,7 @@ function createDependencies(overrides: Partial<MpDependencies> = {}): MpDependen
     withCreditCharge: vi.fn(async (_userId, _cost, _feature, fn) => ({ value: await fn(), credits: 99 })) as MpDependencies["withCreditCharge"],
     generateWishes: vi.fn(async () => ["愿您平安喜乐。", "愿温暖常伴左右。", "祝福日日常新。"]),
     checkTextSecurity: vi.fn(async () => ({ safe: true })),
+    requestLog: vi.fn(),
     ...overrides,
   };
 }
@@ -84,6 +85,13 @@ afterEach(async () => {
 });
 
 describe("小程序 REST 适配层", () => {
+  it("GET /health 无需登录并返回当前版本", async () => {
+    const { baseUrl } = await startApp(createDependencies({ requestLog: vi.fn() }));
+    const response = await fetch(`${baseUrl}/health`);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, version: "1.0.0" });
+  });
+
   it("生产环境缺少微信配置且未显式开启 mock 时返回 503", async () => {
     const deps = createDependencies();
     Object.assign(deps, { isProduction: true, allowMockLogin: false, warn: vi.fn() });

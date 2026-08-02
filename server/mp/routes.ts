@@ -16,6 +16,7 @@ import { checkTextSecurity, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
 import { createM2Router, defaultM2Dependencies } from "./m2-routes";
 import { createM3Router, defaultM3Dependencies, type M3Dependencies } from "./m3-routes";
+import { createMpRequestLogMiddleware, MP_API_VERSION, type MpRequestLogSink } from "./operations";
 
 type Transaction = Awaited<ReturnType<typeof getUserTransactions>>[number];
 
@@ -35,6 +36,7 @@ export type MpDependencies = {
   withCreditCharge: typeof withCreditCharge;
   generateWishes: (input: CopywriterInput) => Promise<string[]>;
   checkTextSecurity: (text: string, openId?: string) => Promise<SecurityCheckResult>;
+  requestLog?: MpRequestLogSink;
 };
 
 function defaultDependencies(): MpDependencies {
@@ -81,6 +83,11 @@ export function createMpRouter(
 ): Router {
   const router = Router();
   const requireAuth = createMpAuthMiddleware(deps.jwtSecret, deps.getUserById);
+
+  router.use(createMpRequestLogMiddleware(deps.requestLog));
+  router.get("/health", (_req, res) => {
+    res.json({ ok: true, version: MP_API_VERSION });
+  });
 
   router.post("/auth/login", asyncRoute(async (req, res) => {
     const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
@@ -182,8 +189,7 @@ export function createMpRouter(
     res.json({ transactions });
   }));
 
-  router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    console.error("[MP REST]", error);
+  router.use((_error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "服务暂时不可用，请稍后重试" } });
   });
 
