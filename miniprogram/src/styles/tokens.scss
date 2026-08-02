@@ -1,17 +1,16 @@
-$font-secondary: 28rpx;
-$font-body: 36rpx;
-$font-button: 40rpx;
-$font-title: 44rpx;
-$font-hero: 52rpx;
-$font-large-mode: 42rpx;
+$font-secondary: var(--lejoy-font-secondary, 28rpx);
+$font-body: var(--lejoy-font-body, 36rpx);
+$font-button: var(--lejoy-font-button, 40rpx);
+$font-title: var(--lejoy-font-title, 44rpx);
+$font-hero: var(--lejoy-font-hero, 52rpx);
 
-$touch-min: 96rpx;
-$button-main-height: 108rpx;
+$touch-min: var(--lejoy-touch-min, 96rpx);
+$button-main-height: var(--lejoy-button-main-height, 108rpx);
 
 $color-primary: #c2410c;
 $color-primary-strong: #9a3412;
 $color-primary-soft: #ffedd5;
-$color-page: #fff7ed;
+$color-page: #faf9f5;
 $color-surface: #ffffff;
 $color-text: #292524;
 $color-secondary: #57534e;
@@ -21,6 +20,6 @@ $color-disabled: #d6d3d1;
 $color-disabled-text: #57534e;
 $color-danger: #b91c1c;
 
-$radius-card: 28rpx;
-$shadow-card: 0 8rpx 24rpx rgba(124, 45, 18, 0.1);
+$radius-card: 48rpx;
+$shadow-card: 0 8rpx 24rpx rgba(41, 37, 36, 0.08);
 $page-padding: 32rpx;

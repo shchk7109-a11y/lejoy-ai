@@ -2,6 +2,27 @@
 
 .copywriter-page {
   min-height: 100vh;
+  background: $color-page;
+}
+
+.guide-panel__hint {
+  display: block;
+  margin-top: 18rpx;
+  color: $color-secondary;
+  font-size: $font-secondary;
+  line-height: 1.55;
+}
+
+.context-input {
+  width: 100%;
+  min-height: 240rpx;
+  margin-top: 30rpx;
+  padding: 28rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+  font-size: $font-body;
+  line-height: 1.65;
 }
 
 .copywriter-page--result {

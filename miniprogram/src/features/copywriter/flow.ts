@@ -1,10 +1,11 @@
-export type CopywriterStep = "scenario" | "relationship" | "tone";
+export type CopywriterStep = "scenario" | "relationship" | "tone" | "customContext";
 
 export type CopywriterFlow = {
   step: CopywriterStep;
   scenario: string;
   relationship: string;
   tone: string;
+  customContext: string;
   canGenerate: boolean;
 };
 
@@ -13,6 +14,7 @@ export const initialCopywriterFlow: CopywriterFlow = {
   scenario: "",
   relationship: "",
   tone: "",
+  customContext: "",
   canGenerate: false,
 };
 
@@ -23,7 +25,14 @@ export function advanceCopywriterFlow(state: CopywriterFlow, answer: string): Co
   if (state.step === "relationship") {
     return { ...state, relationship: answer, step: "tone" };
   }
-  return { ...state, tone: answer, canGenerate: Boolean(answer) };
+  if (state.step === "tone") {
+    return { ...state, tone: answer, step: "customContext", canGenerate: Boolean(answer) };
+  }
+  return { ...state, customContext: answer };
+}
+
+export function setCopywriterContext(state: CopywriterFlow, customContext: string): CopywriterFlow {
+  return { ...state, customContext };
 }
 
 export function resetCopywriterFlow(_state: CopywriterFlow): CopywriterFlow {

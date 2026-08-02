@@ -2,7 +2,7 @@
 
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+  background: $color-page;
 }
 
 .login-page__content {
@@ -20,7 +20,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 48rpx;
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  border: 3rpx solid #fde68a;
+  background: #ffffff;
   box-shadow: $shadow-card;
   font-size: 84rpx;
 }
@@ -30,6 +31,7 @@
   font-size: $font-hero;
   font-weight: 800;
   color: $color-primary-strong;
+  font-family: Georgia, "Songti SC", "STSong", serif;
 }
 
 .login-page__description {

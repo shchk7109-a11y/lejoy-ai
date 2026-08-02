@@ -31,7 +31,8 @@ export type CreditTransaction = {
   createdAt: string;
 };
 
-type ApiError = { error?: { code?: string; message?: string } };
+type ApiError = { code?: string; message?: string; error?: { code?: string; message?: string } };
+export type MediaSecurityStatus = "bypassed" | "pending";
 
 async function request<T>(path: string, options: { method?: "GET" | "POST"; data?: unknown; auth?: boolean } = {}): Promise<T> {
   const token = getToken();
@@ -50,7 +51,7 @@ async function request<T>(path: string, options: { method?: "GET" | "POST"; data
     throw new Error("登录已失效，请重新登录");
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new Error(response.data.error?.message || "服务暂时不可用，请稍后重试");
+    throw new Error(response.data.error?.message || response.data.message || "服务暂时不可用，请稍后重试");
   }
   return response.data;
 }
@@ -63,7 +64,17 @@ export const mpApi = {
   }),
   me: () => request<MpUser>("/api/mp/user/me"),
   modules: () => request<{ modules: MpModule[] }>("/api/mp/modules"),
-  generateCopywriter: (data: { scenario: string; relationship: string; tone: string }) =>
+  generateCopywriter: (data: { scenario: string; relationship: string; tone: string; customContext?: string }) =>
     request<{ wishes: string[]; credits: number }>("/api/mp/copywriter/generate", { method: "POST", data }),
   creditHistory: () => request<{ transactions: CreditTransaction[] }>("/api/mp/credits/history"),
+  uploadImage: (data: { base64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" }) =>
+    request<{ url: string; fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/upload/image", { method: "POST", data }),
+  uploadAudio: (data: { base64: string; mimeType: "audio/mpeg" }) =>
+    request<{ url: string; fileKey: string }>("/api/mp/upload/audio", { method: "POST", data }),
+  restorePhoto: (data: { imageUrl: string; prompt?: string }) =>
+    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data }),
+  transformPhoto: (data: { imageUrl: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }) =>
+    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data }),
+  transcribeAudio: (audioUrl: string) =>
+    request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { audioUrl, language: "zh" } }),
 };

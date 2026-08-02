@@ -29,12 +29,35 @@ button,
   font-weight: 700 !important;
 }
 
+.accessibility-root {
+  min-height: 100vh;
+}
+
 .large-text-mode {
-  view,
-  text,
-  button,
-  input,
-  textarea {
-    font-size: $font-large-mode;
-  }
+  --lejoy-font-secondary: 34rpx;
+  --lejoy-font-body: 42rpx;
+  --lejoy-font-button: 46rpx;
+  --lejoy-font-title: 50rpx;
+  --lejoy-font-hero: 60rpx;
+  --lejoy-touch-min: 112rpx;
+  --lejoy-button-main-height: 124rpx;
+}
+
+.large-text-mode .nut-button--xlarge {
+  min-height: var(--lejoy-button-main-height) !important;
+  font-size: var(--lejoy-font-button) !important;
+}
+
+.large-text-mode .brand-block__subtitle,
+.large-text-mode .module-card__description,
+.large-text-mode .account-pill__logout {
+  font-size: 40rpx;
+}
+
+.large-text-mode .module-card__name {
+  font-size: 52rpx;
+}
+
+.large-text-mode .module-card__soon {
+  font-size: 34rpx;
 }

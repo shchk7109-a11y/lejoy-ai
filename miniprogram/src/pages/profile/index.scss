@@ -4,15 +4,60 @@
   padding: $page-padding;
 }
 
+.profile-page {
+  min-height: 100vh;
+  background: $color-page;
+}
+
 .user-card {
   padding: 34rpx;
   display: flex;
   align-items: center;
   gap: 24rpx;
+  border: 3rpx solid $color-border;
   border-radius: $radius-card;
-  background: linear-gradient(135deg, #b45309, #c2410c);
+  background: $color-primary-soft;
   box-shadow: $shadow-card;
-  color: #ffffff;
+  color: $color-primary-strong;
+}
+
+.large-text-card {
+  min-height: 150rpx;
+  margin-top: 36rpx;
+  padding: 28rpx 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+}
+
+.large-text-card__copy {
+  flex: 1;
+}
+
+.large-text-card__title,
+.large-text-card__description {
+  display: block;
+}
+
+.large-text-card__title {
+  font-size: $font-title;
+  font-weight: 800;
+}
+
+.large-text-card__description {
+  margin-top: 10rpx;
+  color: $color-secondary;
+  font-size: $font-secondary;
+  line-height: 1.5;
+}
+
+.large-text-card__switch {
+  transform: scale(1.25);
+  transform-origin: right center;
 }
 
 .user-card__avatar {
@@ -21,10 +66,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 4rpx solid rgba(255, 255, 255, 0.8);
+  border: 4rpx solid $color-border;
   border-radius: 56rpx;
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: #ffffff;
+  color: $color-primary-strong;
   font-size: 48rpx;
   font-weight: 800;
 }
@@ -37,7 +82,7 @@
 .user-card__label,
 .user-card__credits text {
   display: block;
-  color: #ffffff;
+  color: $color-primary-strong;
 }
 
 .user-card__name {

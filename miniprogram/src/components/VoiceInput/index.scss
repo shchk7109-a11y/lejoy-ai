@@ -1,0 +1,70 @@
+@use "../../styles/tokens.scss" as *;
+
+.voice-input {
+  margin-top: 24rpx;
+}
+
+.voice-input__button {
+  min-height: 120rpx;
+  padding: 20rpx 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  border: 3rpx solid $color-primary;
+  border-radius: 36rpx;
+  background: $color-primary-soft;
+  color: $color-primary-strong;
+  font-size: $font-button;
+  font-weight: 800;
+}
+
+.voice-input__button--busy {
+  opacity: 0.65;
+}
+
+.voice-input--recording .voice-input__button {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+.voice-input__icon {
+  font-size: 48rpx;
+}
+
+.voice-input__tip {
+  display: block;
+  margin-top: 14rpx;
+  color: $color-muted;
+  font-size: $font-secondary;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.voice-input__wave {
+  height: 64rpx;
+  margin-top: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+}
+
+.voice-input__bar {
+  width: 12rpx;
+  border-radius: 8rpx;
+  background: #dc2626;
+  animation: voice-wave 600ms ease-in-out infinite alternate;
+}
+
+.voice-input__bar--1,
+.voice-input__bar--5 { height: 24rpx; }
+.voice-input__bar--2,
+.voice-input__bar--4 { height: 42rpx; animation-delay: 120ms; }
+.voice-input__bar--3 { height: 60rpx; animation-delay: 240ms; }
+
+@keyframes voice-wave {
+  from { transform: scaleY(0.55); }
+  to { transform: scaleY(1); }
+}

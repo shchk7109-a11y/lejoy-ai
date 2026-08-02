@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Text, View } from "@tarojs/components";
+import { useContext, useState } from "react";
+import { Switch, Text, View } from "@tarojs/components";
 import Taro, { useDidShow } from "@tarojs/taro";
 import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type CreditTransaction, type MpUser } from "../../services/api";
+import { AccessibilityContext } from "../../store/accessibility";
 import "./index.scss";
 
 function formatTime(value: string): string {
@@ -12,6 +13,7 @@ function formatTime(value: string): string {
 }
 
 export default function ProfilePage() {
+  const { largeText, setLargeText } = useContext(AccessibilityContext);
   const [user, setUser] = useState<MpUser>();
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
 
@@ -43,6 +45,19 @@ export default function ProfilePage() {
             <Text className="user-card__credits-number">{user?.credits ?? "--"}</Text>
             <Text>积分</Text>
           </View>
+        </View>
+
+        <View className="large-text-card">
+          <View className="large-text-card__copy">
+            <Text className="large-text-card__title">大字模式</Text>
+            <Text className="large-text-card__description">放大全站正文和按钮，阅读更轻松</Text>
+          </View>
+          <Switch
+            className="large-text-card__switch"
+            checked={largeText}
+            color="#C2410C"
+            onChange={(event) => setLargeText(event.detail.value)}
+          />
         </View>
 
         <Text className="profile-page__title">积分明细</Text>
