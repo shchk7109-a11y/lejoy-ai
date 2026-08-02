@@ -1,0 +1,86 @@
+@use "../../styles/tokens.scss" as *;
+
+.about-page {
+  min-height: 100vh;
+  background: $color-page;
+}
+
+.about-page__content {
+  padding: $page-padding;
+}
+
+.about-page__brand {
+  padding: 52rpx 28rpx;
+  text-align: center;
+}
+
+.about-page__logo {
+  width: 128rpx;
+  height: 128rpx;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid $color-border;
+  border-radius: 36rpx;
+  background: $color-primary-soft;
+  color: $color-primary-strong;
+  font-size: 58rpx;
+  font-weight: 900;
+}
+
+.about-page__name,
+.about-page__version {
+  display: block;
+}
+
+.about-page__name {
+  margin-top: 22rpx;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.about-page__version {
+  margin-top: 8rpx;
+  color: $color-secondary;
+  font-size: $font-secondary;
+}
+
+.about-page__operator {
+  padding: 28rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+  font-size: $font-body;
+  line-height: 1.6;
+}
+
+.about-page__links {
+  margin-top: 32rpx;
+  overflow: hidden;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+}
+
+.about-page__link {
+  min-height: 108rpx;
+  padding: 18rpx 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  border-bottom: 2rpx solid $color-border;
+  font-size: $font-title;
+  font-weight: 700;
+}
+
+.about-page__link:last-child {
+  border-bottom: 0;
+}
+
+.about-page__arrow {
+  flex: none;
+  color: $color-primary-strong;
+  font-size: 52rpx;
+}

@@ -60,6 +60,42 @@
   transform-origin: right center;
 }
 
+.about-card {
+  min-height: 132rpx;
+  margin-top: 36rpx;
+  padding: 24rpx 34rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+}
+
+.about-card__title,
+.about-card__version {
+  display: block;
+}
+
+.about-card__title {
+  font-size: $font-title;
+  font-weight: 800;
+}
+
+.about-card__version {
+  margin-top: 8rpx;
+  color: $color-secondary;
+  font-size: $font-secondary;
+}
+
+.about-card__arrow {
+  flex: none;
+  color: $color-primary-strong;
+  font-size: 56rpx;
+  font-weight: 700;
+}
+
 .user-card__avatar {
   width: 112rpx;
   height: 112rpx;

@@ -15,6 +15,9 @@ export default defineAppConfig({
     "pages/ai-kaleidoscope/index",
     "pages/copywriter/index",
     "pages/profile/index",
+    "pages/about/index",
+    "pages/user-agreement/index",
+    "pages/privacy-policy/index",
   ],
   window: {
     navigationStyle: "custom",

@@ -2,6 +2,7 @@ import { useContext, useState } from "react";
 import { Switch, Text, View } from "@tarojs/components";
 import Taro, { useDidShow } from "@tarojs/taro";
 import { PageHeader } from "../../components/PageHeader";
+import { MINIPROGRAM_VERSION } from "../../config/release";
 import { mpApi, type CreditTransaction, type MpUser } from "../../services/api";
 import { AccessibilityContext } from "../../store/accessibility";
 import "./index.scss";
@@ -58,6 +59,14 @@ export default function ProfilePage() {
             color="#C2410C"
             onChange={(event) => setLargeText(event.detail.value)}
           />
+        </View>
+
+        <View className="about-card clickable" onClick={() => Taro.navigateTo({ url: "/pages/about/index" })}>
+          <View>
+            <Text className="about-card__title">关于乐享AI</Text>
+            <Text className="about-card__version">当前版本 {MINIPROGRAM_VERSION}</Text>
+          </View>
+          <Text className="about-card__arrow">›</Text>
         </View>
 
         <Text className="profile-page__title">积分明细</Text>

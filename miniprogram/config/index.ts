@@ -1,5 +1,21 @@
 import { defineConfig, type UserConfigExport } from "@tarojs/cli";
 
+const releaseChannel = process.env.TARO_APP_RELEASE_CHANNEL || "develop";
+const apiBaseUrls: Record<string, string | undefined> = {
+  "develop": process.env.TARO_APP_API_BASE_URL_DEVELOP || "http://127.0.0.1:3000",
+  "trial": process.env.TARO_APP_API_BASE_URL_TRIAL,
+  "release": process.env.TARO_APP_API_BASE_URL_RELEASE,
+};
+
+if (!Object.prototype.hasOwnProperty.call(apiBaseUrls, releaseChannel)) {
+  throw new Error(`TARO_APP_RELEASE_CHANNEL 仅支持 develop、trial 或 release，当前为 ${releaseChannel}`);
+}
+
+const apiBaseUrl = process.env.TARO_APP_API_BASE_URL || apiBaseUrls[releaseChannel];
+if (!apiBaseUrl) {
+  throw new Error(`${releaseChannel} 构建缺少对应的 API 地址，请设置 TARO_APP_API_BASE_URL_${releaseChannel.toUpperCase()}`);
+}
+
 const config: UserConfigExport = {
   projectName: "lejoy-ai-miniprogram",
   date: "2026-08-02",
@@ -12,9 +28,9 @@ const config: UserConfigExport = {
   sourceRoot: "src",
   outputRoot: "dist",
   defineConstants: {
-    __LEJOY_API_BASE_URL__: JSON.stringify(
-      process.env.TARO_APP_API_BASE_URL || "http://127.0.0.1:3000",
-    ),
+    __LEJOY_API_BASE_URL__: JSON.stringify(apiBaseUrl),
+    __LEJOY_MINIPROGRAM_VERSION__: JSON.stringify("1.0.0"),
+    __LEJOY_RELEASE_CHANNEL__: JSON.stringify(releaseChannel),
   },
   framework: "react",
   compiler: {

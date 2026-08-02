@@ -1,0 +1,66 @@
+@use "../styles/tokens.scss" as *;
+
+.legal-page {
+  min-height: 100vh;
+  background: $color-page;
+}
+
+.legal-page__content {
+  padding: $page-padding;
+}
+
+.legal-page__status,
+.legal-page__intro,
+.legal-page__title,
+.legal-page__body,
+.legal-page__third-party-name {
+  display: block;
+}
+
+.legal-page__status {
+  padding: 20rpx 24rpx;
+  border: 3rpx solid #f59e0b;
+  border-radius: $radius-card;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: $font-body;
+  font-weight: 800;
+}
+
+.legal-page__intro {
+  margin-top: 22rpx;
+  color: $color-secondary;
+  font-size: $font-body;
+  line-height: 1.7;
+}
+
+.legal-page__section {
+  margin-top: 36rpx;
+  padding: 30rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+}
+
+.legal-page__title {
+  font-size: $font-title;
+  font-weight: 800;
+}
+
+.legal-page__body {
+  margin-top: 16rpx;
+  color: $color-secondary;
+  font-size: $font-body;
+  line-height: 1.8;
+}
+
+.legal-page__third-party {
+  margin-top: 22rpx;
+  padding-top: 22rpx;
+  border-top: 2rpx solid $color-border;
+}
+
+.legal-page__third-party-name {
+  font-size: $font-body;
+  font-weight: 800;
+}
