@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { consumeCreditsInDatabase } from "./db";
+import { consumeCreditsInDatabase, refundCreditsInDatabase } from "./db";
 
 type FakeOptions = {
   affectedRows: number;
@@ -97,5 +97,25 @@ describe("consumeCreditsInDatabase", () => {
     ).rejects.toThrow("积分扣减数量必须为正整数");
 
     expect(spies.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("refundCreditsInDatabase", () => {
+  it("在同一事务内退还积分并记录 recharge 流水", async () => {
+    const { db, spies } = createFakeDatabase({ affectedRows: 1, balance: 100 });
+
+    await expect(
+      refundCreditsInDatabase(db as never, 7, 2, "photo_restore", "照片修复生成失败退还"),
+    ).resolves.toBe(100);
+
+    expect(spies.transaction).toHaveBeenCalledOnce();
+    expect(spies.insertValues).toHaveBeenCalledWith({
+      userId: 7,
+      amount: 2,
+      type: "recharge",
+      feature: "photo_restore",
+      description: "照片修复生成失败退还",
+      balanceAfter: 100,
+    });
   });
 });

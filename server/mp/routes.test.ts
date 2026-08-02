@@ -43,7 +43,7 @@ function createDependencies(overrides: Partial<MpDependencies> = {}): MpDependen
         createdAt: new Date("2026-08-02T01:00:00.000Z"),
       },
     ]),
-    consumeCredits: vi.fn(async () => 99),
+    withCreditCharge: vi.fn(async (_userId, _cost, _feature, fn) => ({ value: await fn(), credits: 99 })) as MpDependencies["withCreditCharge"],
     generateWishes: vi.fn(async () => ["愿您平安喜乐。", "愿温暖常伴左右。", "祝福日日常新。"]),
     checkTextSecurity: vi.fn(async () => ({ safe: true })),
     ...overrides,
@@ -218,7 +218,7 @@ describe("小程序 REST 适配层", () => {
     expect(deps.checkTextSecurity).toHaveBeenCalledTimes(4);
     expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(1, expect.stringContaining("生日寿辰"), "mp_mock_user");
     expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, "愿您平安喜乐。", "mp_mock_user");
-    expect(deps.consumeCredits).toHaveBeenCalledWith(7, 1, "wish_generate", "暖心文案");
+    expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 1, "wish_generate", expect.any(Function), "暖心文案");
   });
 
   it("积分不足时不调用 AI 并返回 402", async () => {
@@ -234,7 +234,7 @@ describe("小程序 REST 适配层", () => {
 
     expect(response.status).toBe(402);
     expect(deps.generateWishes).not.toHaveBeenCalled();
-    expect(deps.consumeCredits).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
   it("输入内容安全拒绝时不生成也不扣积分", async () => {
@@ -251,7 +251,7 @@ describe("小程序 REST 适配层", () => {
 
     expect(response.status).toBe(422);
     expect(deps.generateWishes).not.toHaveBeenCalled();
-    expect(deps.consumeCredits).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
   it("任一输出内容安全拒绝时不扣积分", async () => {
@@ -270,7 +270,7 @@ describe("小程序 REST 适配层", () => {
     });
 
     expect(response.status).toBe(422);
-    expect(deps.consumeCredits).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).toHaveBeenCalledOnce();
   });
 
   it("GET /credits/history 返回当前用户积分明细", async () => {

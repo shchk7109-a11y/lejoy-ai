@@ -160,6 +160,51 @@ export async function consumeCredits(userId: number, amount: number, feature: st
   return consumeCreditsInDatabase(db, userId, amount, feature, description);
 }
 
+/** AI 生成失败退还：原子增加余额并记录 recharge 流水 */
+export async function refundCreditsInDatabase(
+  db: ReturnType<typeof drizzle>,
+  userId: number,
+  amount: number,
+  feature: string,
+  description: string,
+): Promise<number> {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("积分退还数量必须为正整数");
+  }
+
+  return db.transaction(async (tx) => {
+    const updateResult = await tx
+      .update(users)
+      .set({ credits: sql`${users.credits} + ${amount}` })
+      .where(eq(users.id, userId));
+    if (updateResult[0].affectedRows === 0) throw new Error("用户不存在");
+
+    const updatedUsers = await tx
+      .select({ credits: users.credits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const updatedUser = updatedUsers[0];
+    if (!updatedUser) throw new Error("用户不存在");
+
+    await tx.insert(creditTransactions).values({
+      userId,
+      amount,
+      type: "recharge",
+      feature,
+      description,
+      balanceAfter: updatedUser.credits,
+    });
+    return updatedUser.credits;
+  });
+}
+
+export async function refundCredits(userId: number, amount: number, feature: string, description: string): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("数据库不可用");
+  return refundCreditsInDatabase(db, userId, amount, feature, description);
+}
+
 /** 积分充值：管理员给用户增加积分 */
 export async function rechargeCredits(userId: number, amount: number, description: string): Promise<number> {
   const db = await getDb();

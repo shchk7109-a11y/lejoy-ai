@@ -9,6 +9,7 @@ vi.mock("./db", () => ({
     { id: 1, userId: 1, amount: 100, type: "register", feature: null, description: "新用户注册赠送", balanceAfter: 100, createdAt: new Date() },
   ]),
   consumeCredits: vi.fn().mockResolvedValue(99),
+  refundCredits: vi.fn().mockResolvedValue(100),
   rechargeCredits: vi.fn().mockResolvedValue(200),
   getAllUsers: vi.fn().mockResolvedValue([]),
   getAllCustomerInfo: vi.fn().mockResolvedValue([]),

@@ -5,10 +5,11 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import {
-  getAllUsers, getUserById, rechargeCredits, consumeCredits,
+  getAllUsers, getUserById, rechargeCredits,
   getUserTransactions, getAllAiModels, updateAiModel, upsertAiModel,
   getCustomerInfo, upsertCustomerInfo, getAllCustomerInfo, recordRegisterBonus,
 } from "./db";
+import { withCreditCharge } from "./credits-charge";
 import { analyzeFoodNutrition, generateFoodImage, queryHealthInfo, generateStoryText, suggestStoryTopics } from "./minimaxService";
 import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from "./ai/gateway";
 import { storagePut } from "./storage";
@@ -127,19 +128,26 @@ export const appRouter = router({
     restorePhoto: protectedProcedure
       .input(z.object({ imageUrl: z.string(), prompt: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, CREDIT_COSTS.photo_restore, "photo_restore", "照片修复");
         const promptText = input.prompt
           ? `按照以下要求修改这张照片：${input.prompt}。人物面部保持原有特征不变，效果自然真实、高清。`
           : "修复并增强这张老照片：提升清晰度与光线，修复破损、划痕、噪点与褪色区域，还原自然真实的色彩，人物面部保持原有特征不变，输出专业级照片修复效果。";
-        const resultData = await aiEditImage({ prompt: promptText, imageUrl: input.imageUrl });
-        const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
-        return { imageUrl: url };
+        const { value: imageUrl, credits } = await withCreditCharge(
+          ctx.user.id,
+          CREDIT_COSTS.photo_restore,
+          "photo_restore",
+          async () => {
+            const resultData = await aiEditImage({ prompt: promptText, imageUrl: input.imageUrl });
+            const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
+            return url;
+          },
+          "照片修复",
+        );
+        return { imageUrl, credits };
       }),
 
     transformArt: protectedProcedure
       .input(z.object({ imageUrl: z.string(), style: z.string() }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, CREDIT_COSTS.art_transform, "art_transform", `艺术风格：${input.style}`);
         const stylePrompts: Record<string, string> = {
           "油画": "把这张照片转换成经典油画风格：厚重的笔触肌理、浓郁的色彩层次，保持人物与构图不变。",
           "水彩": "把这张照片转换成清新水彩画风格：柔和的色彩晕染、通透梦幻的质感，保持人物与构图不变。",
@@ -148,9 +156,18 @@ export const appRouter = router({
           "印象派": "把这张照片转换成莫奈印象派油画风格：松弛而鲜活的笔触、斑斓的光影色彩，保持人物与构图不变。",
         };
         const stylePrompt = stylePrompts[input.style] ?? `把这张照片转换成${input.style}艺术风格，保持人物与构图不变。`;
-        const resultData = await aiEditImage({ prompt: stylePrompt, imageUrl: input.imageUrl });
-        const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
-        return { imageUrl: url };
+        const { value: imageUrl, credits } = await withCreditCharge(
+          ctx.user.id,
+          CREDIT_COSTS.art_transform,
+          "art_transform",
+          async () => {
+            const resultData = await aiEditImage({ prompt: stylePrompt, imageUrl: input.imageUrl });
+            const { url } = await storagePut(`results/${ctx.user.id}/${Date.now()}.png`, Buffer.from(resultData, "base64"), "image/png");
+            return url;
+          },
+          `艺术风格：${input.style}`,
+        );
+        return { imageUrl, credits };
       }),
   }),
 
@@ -158,8 +175,14 @@ export const appRouter = router({
     generate: protectedProcedure
       .input(copywriterInputSchema)
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, CREDIT_COSTS.wish_generate, "wish_generate", "暖心文案");
-        return { wishes: await generateCopywriterWishes(input) };
+        const { value: wishes, credits } = await withCreditCharge(
+          ctx.user.id,
+          CREDIT_COSTS.wish_generate,
+          "wish_generate",
+          () => generateCopywriterWishes(input),
+          "暖心文案",
+        );
+        return { wishes, credits };
       }),
   }),
 
@@ -193,14 +216,22 @@ export const appRouter = router({
         protagonist: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, 1, "story_structure", "AI故事构思");
-        const character = input.childName || input.protagonist || "小朋友";
-        return await generateStoryText({
-          age: input.age,
-          theme: input.theme,
-          topic: input.topic,
-          character,
-        });
+        const { value } = await withCreditCharge(
+          ctx.user.id,
+          1,
+          "story_structure",
+          async () => {
+            const character = input.childName || input.protagonist || "小朋友";
+            return generateStoryText({
+              age: input.age,
+              theme: input.theme,
+              topic: input.topic,
+              character,
+            });
+          },
+          "AI故事构思",
+        );
+        return value;
       }),
 
     // Step 2: 生成单页配图（前端并行调用）
@@ -225,17 +256,22 @@ export const appRouter = router({
         title: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        // 只在第一页扭扣积分（整个故事只扭扣一次）
-        if (input.isFirstPage) {
-          await consumeCredits(ctx.user.id, 2, "story_speech", "AI故事语音生成");
-        }
-        // 第一页加上故事标题引入
-        const textToSpeak = input.isFirstPage && input.title
-          ? `${input.title}。${input.text}`
-          : input.text;
-        const { audioData, audioMime } = await aiTTS(textToSpeak, input.voiceType);
-        // 将MIME类型和base64一起返回，前端用于正确播放
-        return { audioBase64: audioData, audioMime, pageNumber: input.pageNumber };
+        const generateSpeech = async () => {
+          const textToSpeak = input.isFirstPage && input.title
+            ? `${input.title}。${input.text}`
+            : input.text;
+          const { audioData, audioMime } = await aiTTS(textToSpeak, input.voiceType);
+          return { audioBase64: audioData, audioMime, pageNumber: input.pageNumber };
+        };
+        if (!input.isFirstPage) return generateSpeech();
+        const { value } = await withCreditCharge(
+          ctx.user.id,
+          2,
+          "story_speech",
+          generateSpeech,
+          "AI故事语音生成",
+        );
+        return value;
       }),
 
     generateVideo: protectedProcedure
@@ -250,16 +286,24 @@ export const appRouter = router({
         })),
       }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, 2, "story_video", "AI故事视频生成");
-        const { generateStoryVideo } = await import("./videoGenerator");
-        const videoBuf = await generateStoryVideo(input.pages, input.title);
-        const safeTitle = input.title.replace(/[^\w\u4e00-\u9fa5]/g, "_").slice(0, 20);
-        const { url } = await storagePut(
-          `story-videos/${ctx.user.id}/${safeTitle}-${Date.now()}.mp4`,
-          videoBuf,
-          "video/mp4"
+        const { value: videoUrl } = await withCreditCharge(
+          ctx.user.id,
+          2,
+          "story_video",
+          async () => {
+            const { generateStoryVideo } = await import("./videoGenerator");
+            const videoBuf = await generateStoryVideo(input.pages, input.title);
+            const safeTitle = input.title.replace(/[^\w\u4e00-\u9fa5]/g, "_").slice(0, 20);
+            const { url } = await storagePut(
+              `story-videos/${ctx.user.id}/${safeTitle}-${Date.now()}.mp4`,
+              videoBuf,
+              "video/mp4"
+            );
+            return url;
+          },
+          "AI故事视频生成",
         );
-        return { videoUrl: url };
+        return { videoUrl };
       }),
   }),
 
@@ -267,7 +311,11 @@ export const appRouter = router({
     analyze: protectedProcedure
       .input(z.object({ mode: z.enum(["FOOD", "HEALTH"]), textHint: z.string().optional(), imageUrl: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, CREDIT_COSTS.life_analyze, "life_analyze", `生活助手:${input.mode}`);
+        const { value } = await withCreditCharge(
+          ctx.user.id,
+          CREDIT_COSTS.life_analyze,
+          "life_analyze",
+          async () => {
 
         // ─── FOOD 模式：使用 MiniMax API（无限流问题）─────────────────────────
         if (input.mode === "FOOD") {
@@ -351,6 +399,10 @@ export const appRouter = router({
 
         // 不应该到达这里
         throw new TRPCError({ code: "BAD_REQUEST", message: "未知的分析模式" });
+          },
+          `生活助手:${input.mode}`,
+        );
+        return value;
       }),
   }),
 
@@ -362,7 +414,6 @@ export const appRouter = router({
         history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })).default([]),
       }))
       .mutation(async ({ input, ctx }) => {
-        await consumeCredits(ctx.user.id, CREDIT_COSTS.chat, "chat", "AI万花筒");
         const systemInstruction = `你是一位经验丰富的全科健康顾问，同时精通中医养生和食药同源理论。服务对象主要是中老年人，语气亲切、耐心、专业。请用中文回答。
 
 【回答风格要求——小红书养生笔记风格，必须严格执行】
@@ -434,12 +485,18 @@ export const appRouter = router({
 - 咽喉不适/肺部问题/咳嗽：灵芝（益肺气）、蛹虫草（补肺化痰）、罗汉果（清热润肺）、百合（润肺止咳）
 - 关节疼痛/腰腿酸软：灵芝（补肝肾强筋骨）、杜仲（补肝肾）、牛膝（强筋骨）
 - 情绪焦虑/压力大：灵芝（安神定志）、玫瑰花（疏肝解郁）、百合（清心除烦）]`;
-        const reply = await aiChatMulti({
-          systemPrompt: systemInstruction,
-          history: input.history,
-          message: input.message + forcedSuffix,
-          imageUrl: input.imageUrl,
-        });
+        const { value: reply } = await withCreditCharge(
+          ctx.user.id,
+          CREDIT_COSTS.chat,
+          "chat",
+          () => aiChatMulti({
+            systemPrompt: systemInstruction,
+            history: input.history,
+            message: input.message + forcedSuffix,
+            imageUrl: input.imageUrl,
+          }),
+          "AI万花筒",
+        );
         return { reply };
       }),
   }),

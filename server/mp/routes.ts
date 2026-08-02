@@ -1,13 +1,13 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import type { InsertUser, User } from "../../drizzle/schema";
 import {
-  consumeCredits,
   getUserById,
   getUserByOpenId,
   getUserTransactions,
   recordRegisterBonus,
   upsertUser,
 } from "../db";
+import { withCreditCharge } from "../credits-charge";
 import { copywriterInputSchema, generateCopywriterWishes, type CopywriterInput } from "../copywriter";
 import { ENV } from "../_core/env";
 import { createMpAuthMiddleware, exchangeWechatCode, signMpToken, type MpAuthenticatedRequest } from "./auth";
@@ -29,7 +29,7 @@ export type MpDependencies = {
   getUserByOpenId: (openId: string) => Promise<User | undefined>;
   getUserById: (id: number) => Promise<User | undefined>;
   getUserTransactions: (userId: number) => Promise<Transaction[]>;
-  consumeCredits: (userId: number, amount: number, feature: string, description: string) => Promise<number>;
+  withCreditCharge: typeof withCreditCharge;
   generateWishes: (input: CopywriterInput) => Promise<string[]>;
   checkTextSecurity: (text: string, openId?: string) => Promise<SecurityCheckResult>;
 };
@@ -48,7 +48,7 @@ function defaultDependencies(): MpDependencies {
     getUserByOpenId,
     getUserById,
     getUserTransactions,
-    consumeCredits,
+    withCreditCharge,
     generateWishes: generateCopywriterWishes,
     checkTextSecurity,
   };
@@ -136,19 +136,29 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
       res.status(422).json({ error: { code: "CONTENT_REJECTED", message: inputCheck.reason ?? "输入内容未通过安全检查" } });
       return;
     }
-    const wishes = await deps.generateWishes(parsed.data);
-    for (const wish of wishes) {
-      const outputCheck = await deps.checkTextSecurity(wish, user.openId);
-      if (!outputCheck.safe) {
-        res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "生成内容未通过安全检查" } });
-        return;
-      }
-    }
-
     try {
-      const credits = await deps.consumeCredits(user.id, 1, "wish_generate", "暖心文案");
+      const { value: wishes, credits } = await deps.withCreditCharge(
+        user.id,
+        1,
+        "wish_generate",
+        async () => {
+          const generated = await deps.generateWishes(parsed.data);
+          for (const wish of generated) {
+            const outputCheck = await deps.checkTextSecurity(wish, user.openId);
+            if (!outputCheck.safe) {
+              throw new ContentRejectedError(outputCheck.reason ?? "生成内容未通过安全检查");
+            }
+          }
+          return generated;
+        },
+        "暖心文案",
+      );
       res.json({ wishes, credits });
     } catch (error) {
+      if (error instanceof ContentRejectedError) {
+        res.status(422).json({ error: { code: "CONTENT_REJECTED", message: error.message } });
+        return;
+      }
       if (error instanceof Error && error.message.includes("积分不足")) {
         res.status(402).json({ error: { code: "INSUFFICIENT_CREDITS", message: error.message } });
         return;
@@ -170,3 +180,5 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
 
   return router;
 }
+
+class ContentRejectedError extends Error {}
