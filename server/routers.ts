@@ -9,11 +9,11 @@ import {
   getUserTransactions, getAllAiModels, updateAiModel, upsertAiModel,
   getCustomerInfo, upsertCustomerInfo, getAllCustomerInfo, recordRegisterBonus,
 } from "./db";
-import { cleanJson } from "./geminiService";
 import { analyzeFoodNutrition, generateFoodImage, queryHealthInfo, generateStoryText, suggestStoryTopics } from "./minimaxService";
 import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from "./ai/gateway";
 import { storagePut } from "./storage";
 import { ENV } from "./_core/env";
+import { copywriterInputSchema, generateCopywriterWishes } from "./copywriter";
 
 // ─── 管理员权限中间件 ──────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -156,18 +156,10 @@ export const appRouter = router({
 
   copywriter: router({
     generate: protectedProcedure
-      .input(z.object({ scenario: z.string(), relationship: z.string(), recipientName: z.string().optional(), tone: z.string(), specificHoliday: z.string().optional(), customContext: z.string().optional() }))
+      .input(copywriterInputSchema)
       .mutation(async ({ input, ctx }) => {
         await consumeCredits(ctx.user.id, CREDIT_COSTS.wish_generate, "wish_generate", "暖心文案");
-        const prompt = `请作为情感细腻的中文文案专家，生成3条不同的祝福语。场景:${input.scenario} 对象:${input.relationship} 收信人:${input.recipientName ?? "对方"} 风格:${input.tone} 节日:${input.specificHoliday ?? "无"} 补充:${input.customContext ?? "无"}。要求：中文，温暖亲切，适合中老年人，每条100字以内。返回JSON对象，格式：{"wishes":["祝福语1","祝福语2","祝福语3"]}，不要任何多余文字。`;
-        const text = await aiChat({
-          systemPrompt: "你是情感细腻的中文文案专家，只返回JSON格式内容。",
-          userPrompt: prompt,
-          json: true,
-        });
-        const parsed = JSON.parse(cleanJson(text));
-        const wishes = Array.isArray(parsed) ? parsed : parsed?.wishes;
-        return { wishes: Array.isArray(wishes) ? wishes : [text] };
+        return { wishes: await generateCopywriterWishes(input) };
       }),
   }),
 
