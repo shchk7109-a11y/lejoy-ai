@@ -23,6 +23,9 @@ function createDependencies(overrides: Partial<MpDependencies> = {}): MpDependen
     jwtSecret: "test-secret-at-least-32-characters-long",
     wechatAppId: "",
     wechatSecret: "",
+    isProduction: false,
+    allowMockLogin: false,
+    warn: vi.fn(),
     exchangeWechatCode: vi.fn(async () => ({ openId: "mp_mock_user", mock: true })),
     upsertUser: vi.fn(async () => undefined),
     recordRegisterBonus: vi.fn(async () => undefined),
@@ -80,6 +83,38 @@ afterEach(async () => {
 });
 
 describe("小程序 REST 适配层", () => {
+  it("生产环境缺少微信配置且未显式开启 mock 时返回 503", async () => {
+    const deps = createDependencies();
+    Object.assign(deps, { isProduction: true, allowMockLogin: false, warn: vi.fn() });
+    const { baseUrl } = await startApp(deps);
+
+    const response = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "wx-code" }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ code: "NOT_CONFIGURED" });
+    expect(deps.exchangeWechatCode).not.toHaveBeenCalled();
+  });
+
+  it("生产环境显式开启 mock 登录时允许登录并输出安全告警", async () => {
+    const warn = vi.fn();
+    const deps = createDependencies();
+    Object.assign(deps, { isProduction: true, allowMockLogin: true, warn });
+    const { baseUrl } = await startApp(deps);
+
+    const response = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "wx-code" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("MP_MOCK_LOGIN=true"));
+  });
+
   it("mock 登录会 upsert 测试用户并签发 JWT", async () => {
     const deps = createDependencies();
     const { baseUrl } = await startApp(deps);

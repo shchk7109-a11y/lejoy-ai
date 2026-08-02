@@ -20,6 +20,9 @@ export type MpDependencies = {
   jwtSecret: string;
   wechatAppId: string;
   wechatSecret: string;
+  isProduction: boolean;
+  allowMockLogin: boolean;
+  warn: (message: string) => void;
   exchangeWechatCode: (code: string, appId: string, secret: string) => Promise<{ openId: string; mock: boolean }>;
   upsertUser: (user: InsertUser) => Promise<void>;
   recordRegisterBonus: (userId: number, credits: number) => Promise<void>;
@@ -36,6 +39,9 @@ function defaultDependencies(): MpDependencies {
     jwtSecret: ENV.cookieSecret,
     wechatAppId: ENV.wechatMiniAppId,
     wechatSecret: ENV.wechatMiniSecret,
+    isProduction: ENV.isProduction,
+    allowMockLogin: ENV.mpMockLogin,
+    warn: (message) => console.warn(message),
     exchangeWechatCode,
     upsertUser,
     recordRegisterBonus,
@@ -75,6 +81,15 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
     if (!code) {
       res.status(400).json({ error: { code: "BAD_REQUEST", message: "code 不能为空" } });
       return;
+    }
+    const hasWechatConfig = Boolean(deps.wechatAppId && deps.wechatSecret);
+    const hasNoWechatConfig = !deps.wechatAppId && !deps.wechatSecret;
+    if (deps.isProduction && !hasWechatConfig) {
+      if (!(hasNoWechatConfig && deps.allowMockLogin)) {
+        res.status(503).json({ code: "NOT_CONFIGURED", message: "微信小程序登录尚未配置" });
+        return;
+      }
+      deps.warn("[安全告警] 生产环境已通过 MP_MOCK_LOGIN=true 显式启用 mock 登录");
     }
     const session = await deps.exchangeWechatCode(code, deps.wechatAppId, deps.wechatSecret);
     await deps.upsertUser({

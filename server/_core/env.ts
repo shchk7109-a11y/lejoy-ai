@@ -4,6 +4,7 @@ export const ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   wechatMiniAppId: process.env.WECHAT_MINI_APPID ?? "",
   wechatMiniSecret: process.env.WECHAT_MINI_SECRET ?? "",
+  mpMockLogin: process.env.MP_MOCK_LOGIN === "true",
   contentSecurity: process.env.CONTENT_SECURITY ?? "off",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
