@@ -61,6 +61,7 @@ describe("万花筒输出红线", () => {
       expect(blocksChatOutput(output), output).toBe(true);
     }
     expect(blocksChatOutput("可以考虑在晚饭后散步十分钟。" )).toBe(false);
+    expect(blocksChatOutput("可以等当地平静下来再出门。" )).toBe(false);
   });
 
   it("普通生活建议不会被输出过滤器误伤", () => {
