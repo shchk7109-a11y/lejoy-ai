@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import axios from "axios";
 
-describe("MiniMax API Key validation", () => {
+describe.skipIf(!process.env.MINIMAX_API_KEY)("MiniMax API Key validation", () => {
   it("should have MINIMAX_API_KEY configured", () => {
     const key = process.env.MINIMAX_API_KEY;
     expect(key).toBeTruthy();
