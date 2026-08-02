@@ -6,6 +6,7 @@ import { AigcBadge } from "../../components/AigcBadge";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type LifeResult } from "../../services/api";
+import { ensurePrivacyAuthorized } from "../../services/privacy";
 import "./index.scss";
 
 type Mode = "recipe" | "plant" | "health";
@@ -39,6 +40,7 @@ export default function LifeAssistantPage() {
   async function chooseAndAnalyze(sourceType: "camera" | "album") {
     if (!mode || busyMessage) return;
     try {
+      await ensurePrivacyAuthorized();
       const media = await Taro.chooseMedia({ count: 1, mediaType: ["image"], sourceType: [sourceType], sizeType: ["compressed", "original"] });
       const file = media.tempFiles[0];
       if (!file) return;

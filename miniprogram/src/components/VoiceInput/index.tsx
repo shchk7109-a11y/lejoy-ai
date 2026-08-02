@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { mpApi } from "../../services/api";
+import { ensurePrivacyAuthorized } from "../../services/privacy";
 import "./index.scss";
 
 export function formatRecordingTime(seconds: number): string {
@@ -101,6 +102,7 @@ export function VoiceInput({ onResult }: { onResult: (text: string) => void }) {
     if (recording || transcribing) return;
     touchHeldRef.current = true;
     try {
+      await ensurePrivacyAuthorized();
       const setting = await Taro.getSetting();
       const permission = setting.authSetting["scope.record"];
       if (permission === false) {

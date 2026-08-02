@@ -5,6 +5,7 @@ import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type MediaSecurityStatus } from "../../services/api";
+import { ensurePrivacyAuthorized } from "../../services/privacy";
 import "./index.scss";
 
 const ART_STYLES = [
@@ -55,6 +56,7 @@ export default function SilverLensPage() {
   async function chooseImage(sourceType: "camera" | "album") {
     if (busy) return;
     try {
+      await ensurePrivacyAuthorized();
       const result = await Taro.chooseMedia({
         count: 1,
         mediaType: ["image"],
@@ -105,6 +107,7 @@ export default function SilverLensPage() {
   async function saveResult() {
     if (!resultUrl) return;
     try {
+      await ensurePrivacyAuthorized();
       const setting = await Taro.getSetting();
       if (setting.authSetting["scope.writePhotosAlbum"] === false) {
         await guideToSettings("需要保存权限", "请在设置中允许保存到相册，再回来保存照片。");
