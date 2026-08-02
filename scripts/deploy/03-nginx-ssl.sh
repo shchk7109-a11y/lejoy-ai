@@ -130,8 +130,8 @@ NGINX_HTTPS
 nginx -t
 systemctl reload nginx
 
-health="$(curl -fsS --max-time 15 "https://${DOMAIN}/api/mp/health")"
-modules_status="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "https://${DOMAIN}/api/mp/modules")"
+health="$(curl -fsS --max-time 15 --resolve "${DOMAIN}:443:127.0.0.1" "https://${DOMAIN}/api/mp/health")"
+modules_status="$(curl -sS --max-time 15 --resolve "${DOMAIN}:443:127.0.0.1" -o /dev/null -w '%{http_code}' "https://${DOMAIN}/api/mp/modules")"
 if [[ "${modules_status}" != "401" ]]; then
   printf '未鉴权 modules 状态异常：%s\n' "${modules_status}" >&2
   exit 1
