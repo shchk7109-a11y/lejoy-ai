@@ -37,6 +37,9 @@ describe("M3 小程序页面契约", () => {
     expect(page).toContain("createInnerAudioContext");
     expect(page).toContain("pageNumber");
     expect(page).toContain("AigcBadge");
+    expect(page).toContain("setIllustrating(true)");
+    expect(page).toMatch(/setPages\(\(current\)\s*=>\s*current\.map/);
+    expect(page).toContain("正在逐页补图");
   });
 
   it("生活助手三项均有一次一问入口，文字入口接语音", () => {

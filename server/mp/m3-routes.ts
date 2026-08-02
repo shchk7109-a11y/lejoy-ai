@@ -329,7 +329,21 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
 
-    if (blocksChatInput(message)) {
+    if (safeHistory.length > 0) {
+      const historyCheck = await deps.checkTextSecurity(
+        safeHistory.map((item) => `${item.role === "user" ? "用户" : "助手"}：${item.content}`).join("\n"),
+        user.openId,
+      );
+      if (!historyCheck.safe) {
+        res.status(422).json({ error: { code: "CONTENT_REJECTED", message: historyCheck.reason ?? "对话历史未通过安全检查" } });
+        return;
+      }
+    }
+
+    const historyHitsRedLine = safeHistory.some((item) => (
+      blocksChatInput(item.content) || blocksChatOutput(item.content)
+    ));
+    if (blocksChatInput(message) || historyHitsRedLine) {
       const reply = appendChatDisclaimer(CHAT_MEDICAL_GUIDANCE);
       const outputCheck = await deps.checkTextSecurity(reply, user.openId);
       if (!outputCheck.safe) {

@@ -37,6 +37,7 @@ export default function StoryTimePage() {
   const [pages, setPages] = useState<StoryPage[]>([]);
   const [voiceType, setVoiceType] = useState("lively");
   const [busyMessage, setBusyMessage] = useState("");
+  const [illustrating, setIllustrating] = useState(false);
   const [playingPage, setPlayingPage] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
 
@@ -59,7 +60,7 @@ export default function StoryTimePage() {
   }
 
   async function generateStory(topic: StoryTopic) {
-    if (busyMessage) return;
+    if (busyMessage || illustrating) return;
     setBusyMessage("先写四页故事，请稍候…");
     try {
       const story = await mpApi.generateStoryStructure({
@@ -72,21 +73,32 @@ export default function StoryTimePage() {
       setTitle(story.title);
       setPages(story.pages);
       setStep("result");
-      setBusyMessage("故事写好了，正在逐页配图…");
-      const illustrated = await Promise.all(story.pages.map(async (page) => {
-        const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
-        return { ...page, imageUrl: image.imageUrl };
+      setBusyMessage("");
+      setIllustrating(true);
+      const imageResults = await Promise.all(story.pages.map(async (page) => {
+        try {
+          const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
+          setPages((current) => current.map((currentPage) => (
+            currentPage.pageNumber === page.pageNumber ? { ...currentPage, imageUrl: image.imageUrl } : currentPage
+          )));
+          return true;
+        } catch {
+          return false;
+        }
       }));
-      setPages(illustrated);
+      if (imageResults.some((success) => !success)) {
+        await Taro.showToast({ title: "部分配图失败，请重新生成故事", icon: "none", duration: 3000 });
+      }
     } catch (error) {
       await showError(error);
     } finally {
       setBusyMessage("");
+      setIllustrating(false);
     }
   }
 
   async function prepareAndPlay() {
-    if (!pages.length || busyMessage) return;
+    if (!pages.length || busyMessage || illustrating) return;
     setBusyMessage("正在准备四页朗读…");
     try {
       let readyPages = pages;
@@ -138,6 +150,7 @@ export default function StoryTimePage() {
     setTopics([]);
     setTitle("");
     setPages([]);
+    setIllustrating(false);
     setPlayingPage(undefined);
   }
 
@@ -193,7 +206,7 @@ export default function StoryTimePage() {
         {step === "result" ? (
           <View className="story-result">
             <Text className="story-result__title">{title}</Text>
-            <Text className="story-result__tip">共 4 页，图片会逐页补齐</Text>
+            <Text className="story-result__tip">{illustrating ? "四页文字已完成，正在逐页补图…" : "共 4 页，文字和图片已准备好"}</Text>
             {pages.map((page) => (
               <View key={page.pageNumber} className={`story-card ${playingPage === page.pageNumber ? "story-card--playing" : ""}`}>
                 <Text className="story-card__number">第 {page.pageNumber} 页</Text>
@@ -209,10 +222,10 @@ export default function StoryTimePage() {
                 </View>
               ))}
             </View>
-            <Button block size="xlarge" type="primary" disabled={pages.some((page) => !page.imageUrl)} loading={Boolean(busyMessage)} onClick={prepareAndPlay}>
+            <Button block size="xlarge" type="primary" disabled={illustrating || pages.some((page) => !page.imageUrl)} loading={Boolean(busyMessage)} onClick={prepareAndPlay}>
               {playingPage ? `正在朗读第 ${playingPage} 页` : "播放四页朗读"}
             </Button>
-            <View className="story-restart clickable" onClick={restart}><Text>再讲一个故事</Text></View>
+            {!illustrating ? <View className="story-restart clickable" onClick={restart}><Text>再讲一个故事</Text></View> : null}
             <AigcBadge />
           </View>
         ) : null}

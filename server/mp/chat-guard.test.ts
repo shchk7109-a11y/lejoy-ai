@@ -52,6 +52,17 @@ describe("万花筒输出红线", () => {
     }
   });
 
+  it("拦截通用药物、保健品和治疗方案推荐表达", () => {
+    for (const output of [
+      "可以考虑缬沙坦。",
+      "建议使用某品牌鱼油保健品。",
+      "建议采用针灸治疗方案。",
+    ]) {
+      expect(blocksChatOutput(output), output).toBe(true);
+    }
+    expect(blocksChatOutput("可以考虑在晚饭后散步十分钟。" )).toBe(false);
+  });
+
   it("普通生活建议不会被输出过滤器误伤", () => {
     expect(blocksChatOutput("春天可以适当散步，饮食注意多样化，晚上保持规律作息。" )).toBe(false);
   });

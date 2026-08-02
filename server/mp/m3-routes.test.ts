@@ -306,6 +306,45 @@ describe("M3 万花筒合规聊天 REST 接口", () => {
     expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
+  it("历史消息中的医疗红线同样不调模型不扣分", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const response = await post(baseUrl, "/chat", {
+      message: "请接着回答",
+      history: [
+        { role: "user", content: "血压高吃什么药" },
+        { role: "assistant", content: "我来继续说明。" },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      reply: `${CHAT_MEDICAL_GUIDANCE}\n\n${CHAT_DISCLAIMER}`,
+      credits: 100,
+      guarded: true,
+    });
+    expect(deps.aiChatMulti).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
+
+  it("历史消息作为不可信输入接受内容安全检查", async () => {
+    const checkTextSecurity = vi.fn(async (text: string) => ({
+      safe: !text.includes("历史违规内容"),
+      reason: text.includes("历史违规内容") ? "历史内容未通过安全检查" : undefined,
+    }));
+    const deps = dependencies({ checkTextSecurity });
+    const baseUrl = await startApp(deps);
+    const response = await post(baseUrl, "/chat", {
+      message: "接着聊",
+      history: [{ role: "user", content: "历史违规内容" }],
+    });
+
+    expect(response.status).toBe(422);
+    expect(deps.aiChatMulti).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+    expect(checkTextSecurity).toHaveBeenCalledWith(expect.stringContaining("历史违规内容"), "mp-openid");
+  });
+
   it("模型输出包含药名或剂量时过滤为就医引导并退分", async () => {
     const consume = vi.fn(async () => 99);
     const refund = vi.fn(async () => 100);
@@ -356,9 +395,10 @@ describe("M3 万花筒合规聊天 REST 接口", () => {
     expect(body.reply).toBe(`可以从固定起床时间、白天适量活动和睡前放松开始。\n\n${CHAT_DISCLAIMER}`);
     expect(body).toMatchObject({ credits: 99, guarded: false });
     expect(aiChatMulti).toHaveBeenCalledWith(expect.objectContaining({ history, message: "睡前有哪些放松活动" }));
-    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(2);
+    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(3);
     expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(1, "睡前有哪些放松活动", "mp-openid");
-    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, body.reply, "mp-openid");
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, expect.stringContaining("最近想调整作息"), "mp-openid");
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(3, body.reply, "mp-openid");
     expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 1, "life_chat", expect.any(Function), "AI万花筒");
   });
 });
