@@ -10,7 +10,7 @@ import {
   getCustomerInfo, upsertCustomerInfo, getAllCustomerInfo, recordRegisterBonus,
 } from "./db";
 import { withCreditCharge } from "./credits-charge";
-import { analyzeFoodNutrition, generateFoodImage, queryHealthInfo, generateStoryText, suggestStoryTopics } from "./minimaxService";
+import { analyzeFoodNutrition, buildStoryImagePrompt, generateFoodImage, queryHealthInfo, generateStoryText, suggestStoryTopics } from "./minimaxService";
 import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from "./ai/gateway";
 import { storagePut } from "./storage";
 import { ENV } from "./_core/env";
@@ -231,7 +231,7 @@ export const appRouter = router({
       .input(z.object({ imagePrompt: z.string(), pageNumber: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const base64 = await aiGenerateImage({
-          prompt: `儿童绘本插画，温暖可爱的风格，色彩明亮柔和，角色友善。第${input.pageNumber}页：${input.imagePrompt}`,
+          prompt: buildStoryImagePrompt(input.imagePrompt, input.pageNumber),
           aspectRatio: "1:1"
         });
         const { url } = await storagePut(`stories/${ctx.user.id}/${Date.now()}-p${input.pageNumber}.png`, Buffer.from(base64, "base64"), "image/png");

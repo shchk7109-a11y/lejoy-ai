@@ -27,6 +27,10 @@ function parseModelJsonArray<T>(raw: string): T {
   return JSON.parse(arrMatch[0]) as T;
 }
 
+export function buildStoryImagePrompt(imagePrompt: string, pageNumber: number): string {
+  return `儿童绘本插画，温暖可爱的风格，色彩明亮柔和，角色友善。第${pageNumber}页：${imagePrompt}`;
+}
+
 /**
  * 生成故事文本结构
  */

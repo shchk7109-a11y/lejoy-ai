@@ -15,6 +15,7 @@ import { MP_MODULES } from "./modules";
 import { checkTextSecurity, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
 import { createM2Router, defaultM2Dependencies } from "./m2-routes";
+import { createM3Router, defaultM3Dependencies, type M3Dependencies } from "./m3-routes";
 
 type Transaction = Awaited<ReturnType<typeof getUserTransactions>>[number];
 
@@ -74,7 +75,10 @@ function securityInput(input: CopywriterInput): string {
   return Object.values(input).filter((value): value is string => typeof value === "string" && value.length > 0).join("\n");
 }
 
-export function createMpRouter(deps: MpDependencies = defaultDependencies()): Router {
+export function createMpRouter(
+  deps: MpDependencies = defaultDependencies(),
+  m3Deps: M3Dependencies = defaultM3Dependencies(),
+): Router {
   const router = Router();
   const requireAuth = createMpAuthMiddleware(deps.jwtSecret, deps.getUserById);
 
@@ -122,6 +126,7 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
   });
 
   router.use(createM2Router(defaultM2Dependencies(), requireAuth));
+  router.use(createM3Router(m3Deps, requireAuth));
 
   router.post("/copywriter/generate", requireAuth, asyncRoute(async (req, res) => {
     const parsed = copywriterInputSchema.safeParse(req.body);

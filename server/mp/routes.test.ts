@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../../drizzle/schema";
+import { defaultM3Dependencies, type M3Dependencies } from "./m3-routes";
 import { createMpRouter, type MpDependencies } from "./routes";
 
 const testUser: User = {
@@ -52,10 +53,10 @@ function createDependencies(overrides: Partial<MpDependencies> = {}): MpDependen
 
 const servers: Server[] = [];
 
-async function startApp(deps: MpDependencies): Promise<{ app: Express; baseUrl: string }> {
+async function startApp(deps: MpDependencies, m3Deps?: M3Dependencies): Promise<{ app: Express; baseUrl: string }> {
   const app = express();
   app.use(express.json());
-  app.use("/api/mp", createMpRouter(deps));
+  app.use("/api/mp", createMpRouter(deps, m3Deps));
   const server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, "127.0.0.1", () => resolve(listening));
   });
@@ -163,6 +164,27 @@ describe("小程序 REST 适配层", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({ error: { code: "UNAUTHORIZED" } });
+  });
+
+  it("M3 故事接口已挂载并复用当前用户鉴权", async () => {
+    const suggestStoryTopics = vi.fn(async () => [1, 2, 3, 4].map((index) => ({
+      title: `题材${index}`,
+      description: `简介${index}`,
+      protagonist: `主角${index}`,
+    })));
+    const m3Deps = { ...defaultM3Dependencies(), suggestStoryTopics };
+    const { baseUrl } = await startApp(createDependencies(), m3Deps);
+    const token = await login(baseUrl);
+
+    const response = await fetch(`${baseUrl}/story/suggest-topics`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ theme: "勇气成长", age: 6 }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ topics: expect.arrayContaining([expect.objectContaining({ title: "题材1" })]) });
+    expect(suggestStoryTopics).toHaveBeenCalledOnce();
   });
 
   it("GET /user/me 返回当前用户与积分", async () => {
