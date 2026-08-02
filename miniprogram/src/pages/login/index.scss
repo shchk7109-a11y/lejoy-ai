@@ -1,0 +1,51 @@
+@use "../../styles/tokens.scss" as *;
+
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%);
+}
+
+.login-page__content {
+  padding: 96rpx $page-padding $page-padding;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-page__logo {
+  width: 168rpx;
+  height: 168rpx;
+  margin-bottom: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 48rpx;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  box-shadow: $shadow-card;
+  font-size: 84rpx;
+}
+
+.login-page__title {
+  margin-bottom: 24rpx;
+  font-size: $font-hero;
+  font-weight: 800;
+  color: $color-primary-strong;
+}
+
+.login-page__description {
+  margin-bottom: 88rpx;
+  color: $color-secondary;
+  text-align: center;
+}
+
+.login-page .nut-button {
+  width: 100%;
+}
+
+.login-page__tip {
+  margin-top: 36rpx;
+  font-size: $font-secondary;
+  color: $color-muted;
+  text-align: center;
+  line-height: 1.7;
+}

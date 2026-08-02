@@ -1,0 +1,40 @@
+@use "./styles/tokens.scss" as *;
+
+page {
+  min-height: 100%;
+  background: $color-page;
+  color: $color-text;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: $font-body;
+}
+
+view,
+text,
+button,
+input,
+textarea,
+scroll-view {
+  box-sizing: border-box;
+  font-size: $font-body;
+}
+
+button,
+.clickable {
+  min-height: $touch-min;
+}
+
+.nut-button--xlarge {
+  min-height: $button-main-height !important;
+  font-size: $font-button !important;
+  font-weight: 700 !important;
+}
+
+.large-text-mode {
+  view,
+  text,
+  button,
+  input,
+  textarea {
+    font-size: $font-large-mode;
+  }
+}

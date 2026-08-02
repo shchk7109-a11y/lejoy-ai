@@ -1,0 +1,4 @@
+{
+  "desc": "乐享AI页面索引配置",
+  "rules": [{ "action": "allow", "page": "*" }]
+}

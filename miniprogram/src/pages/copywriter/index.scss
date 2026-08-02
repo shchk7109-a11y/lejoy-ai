@@ -1,0 +1,104 @@
+@use "../../styles/tokens.scss" as *;
+
+.copywriter-page {
+  min-height: 100vh;
+}
+
+.copywriter-page--result {
+  padding-bottom: 130rpx;
+}
+
+.guide-panel,
+.result-panel {
+  padding: 44rpx $page-padding;
+}
+
+.guide-panel__step {
+  display: block;
+  margin-bottom: 18rpx;
+  font-size: $font-secondary;
+  color: $color-primary-strong;
+  font-weight: 700;
+}
+
+.guide-panel__title,
+.result-panel__title {
+  display: block;
+  font-size: $font-hero;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.option-list {
+  margin-top: 40rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.option-card {
+  min-height: 112rpx;
+  padding: 22rpx 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+  color: $color-text;
+  font-weight: 700;
+  box-shadow: $shadow-card;
+}
+
+.option-card--selected {
+  border-color: $color-primary;
+  background: $color-primary-soft;
+  color: $color-primary-strong;
+}
+
+.option-card__mark {
+  font-size: 48rpx;
+  color: $color-primary;
+}
+
+.guide-panel__action {
+  margin-top: 40rpx;
+}
+
+.result-panel__tip {
+  display: block;
+  margin: 16rpx 0 34rpx;
+  font-size: $font-secondary;
+  color: $color-secondary;
+}
+
+.wish-card {
+  margin-bottom: 30rpx;
+  padding: 30rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+  box-shadow: $shadow-card;
+}
+
+.wish-card__number {
+  display: block;
+  margin-bottom: 18rpx;
+  font-size: $font-secondary;
+  color: $color-primary-strong;
+  font-weight: 700;
+}
+
+.wish-card__text {
+  display: block;
+  margin-bottom: 28rpx;
+  line-height: 1.8;
+}
+
+.result-panel__again {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-primary-strong;
+  font-weight: 700;
+}

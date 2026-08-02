@@ -1,0 +1,120 @@
+import { useMemo, useState } from "react";
+import { Text, View } from "@tarojs/components";
+import Taro from "@tarojs/taro";
+import { Button } from "@nutui/nutui-react-taro";
+import { AigcBadge } from "../../components/AigcBadge";
+import { PageHeader } from "../../components/PageHeader";
+import {
+  advanceCopywriterFlow,
+  initialCopywriterFlow,
+  resetCopywriterFlow,
+  type CopywriterStep,
+} from "../../features/copywriter/flow";
+import { mpApi } from "../../services/api";
+import "./index.scss";
+
+const questions: Record<CopywriterStep, { title: string; subtitle: string; options: string[] }> = {
+  scenario: {
+    title: "这段话用在什么场景？",
+    subtitle: "第 1 步，共 3 步",
+    options: ["节日祝福", "生日寿辰", "日常关怀", "安慰鼓励", "感谢致意", "发朋友圈"],
+  },
+  relationship: {
+    title: "这段话想送给谁？",
+    subtitle: "第 2 步，共 3 步",
+    options: ["家人", "长辈", "朋友", "晚辈", "伴侣", "同事"],
+  },
+  tone: {
+    title: "希望是什么语气？",
+    subtitle: "第 3 步，共 3 步",
+    options: ["温暖亲切", "庄重得体", "幽默轻松", "文采飞扬"],
+  },
+};
+
+export default function CopywriterPage() {
+  const [flow, setFlow] = useState(initialCopywriterFlow);
+  const [wishes, setWishes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const question = questions[flow.step];
+  const selected = useMemo(() => flow[flow.step], [flow]);
+
+  function selectOption(option: string) {
+    setFlow((current) => advanceCopywriterFlow(current, option));
+  }
+
+  async function generate() {
+    if (!flow.canGenerate || loading) return;
+    setLoading(true);
+    try {
+      const result = await mpApi.generateCopywriter({
+        scenario: flow.scenario,
+        relationship: flow.relationship,
+        tone: flow.tone,
+      });
+      setWishes(result.wishes);
+    } catch (error) {
+      await Taro.showToast({ title: error instanceof Error ? error.message : "生成失败，请重试", icon: "none", duration: 3000 });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copyWish(wish: string) {
+    await Taro.setClipboardData({ data: wish });
+    await Taro.showToast({ title: "复制成功", icon: "success" });
+  }
+
+  function startAgain() {
+    setWishes([]);
+    setFlow((current) => resetCopywriterFlow(current));
+  }
+
+  return (
+    <View className={`copywriter-page ${wishes.length ? "copywriter-page--result" : ""}`}>
+      <PageHeader title="暖心文案" />
+      {wishes.length === 0 ? (
+        <View className="guide-panel">
+          <Text className="guide-panel__step">{question.subtitle}</Text>
+          <Text className="guide-panel__title">{question.title}</Text>
+          <View className="option-list">
+            {question.options.map((option) => (
+              <View
+                key={option}
+                className={`option-card clickable ${selected === option ? "option-card--selected" : ""}`}
+                onClick={() => selectOption(option)}
+              >
+                <Text>{option}</Text>
+                <Text className="option-card__mark">{selected === option ? "✓" : "›"}</Text>
+              </View>
+            ))}
+          </View>
+          {flow.step === "tone" ? (
+            <View className="guide-panel__action">
+              <Button block size="xlarge" type="primary" disabled={!flow.canGenerate} loading={loading} onClick={generate}>
+                生成 3 条暖心文案
+              </Button>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View className="result-panel">
+          <Text className="result-panel__title">为您生成了 3 条文案</Text>
+          <Text className="result-panel__tip">选一条喜欢的，点击大按钮复制</Text>
+          {wishes.map((wish, index) => (
+            <View key={`${index}-${wish}`} className="wish-card">
+              <Text className="wish-card__number">第 {index + 1} 条</Text>
+              <Text className="wish-card__text">{wish}</Text>
+              <Button block size="xlarge" type="primary" fill="outline" onClick={() => copyWish(wish)}>
+                复制这条文案
+              </Button>
+            </View>
+          ))}
+          <View className="result-panel__again clickable" onClick={startAgain}>
+            <Text>重新选择并生成</Text>
+          </View>
+        </View>
+      )}
+      {wishes.length > 0 ? <AigcBadge /> : null}
+    </View>
+  );
+}

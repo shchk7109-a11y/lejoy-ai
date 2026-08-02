@@ -1,0 +1,14 @@
+{
+  "appid": "wx513752af48b6cdae",
+  "projectname": "lejoy-ai-miniprogram",
+  "description": "乐享AI适老化微信小程序",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "dist/",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  }
+}

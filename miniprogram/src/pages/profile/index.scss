@@ -1,0 +1,134 @@
+@use "../../styles/tokens.scss" as *;
+
+.profile-page__content {
+  padding: $page-padding;
+}
+
+.user-card {
+  padding: 34rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  border-radius: $radius-card;
+  background: linear-gradient(135deg, #d97706, #c2410c);
+  box-shadow: $shadow-card;
+  color: #ffffff;
+}
+
+.user-card__avatar {
+  width: 112rpx;
+  height: 112rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 4rpx solid rgba(255, 255, 255, 0.8);
+  border-radius: 56rpx;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  font-size: 48rpx;
+  font-weight: 800;
+}
+
+.user-card__info {
+  flex: 1;
+}
+
+.user-card__name,
+.user-card__label,
+.user-card__credits text {
+  display: block;
+  color: #ffffff;
+}
+
+.user-card__name {
+  font-size: $font-title;
+  font-weight: 800;
+}
+
+.user-card__label,
+.user-card__credits text {
+  margin-top: 8rpx;
+  font-size: $font-secondary;
+}
+
+.user-card__credits {
+  min-width: 128rpx;
+  text-align: center;
+}
+
+.user-card__credits-number {
+  font-size: 48rpx !important;
+  font-weight: 800;
+}
+
+.profile-page__title {
+  display: block;
+  margin: 48rpx 0 22rpx;
+  font-size: $font-title;
+  font-weight: 800;
+}
+
+.transaction-list {
+  overflow: hidden;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+  background: $color-surface;
+  box-shadow: $shadow-card;
+}
+
+.transaction-item {
+  min-height: 128rpx;
+  padding: 24rpx 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2rpx solid $color-border;
+}
+
+.transaction-item:last-child {
+  border-bottom: 0;
+}
+
+.transaction-item__description,
+.transaction-item__time,
+.transaction-item__amount text {
+  display: block;
+}
+
+.transaction-item__description {
+  font-weight: 700;
+}
+
+.transaction-item__time,
+.transaction-item__balance {
+  margin-top: 8rpx;
+  font-size: $font-secondary;
+  color: $color-muted;
+}
+
+.transaction-item__amount {
+  min-width: 150rpx;
+  text-align: right;
+}
+
+.transaction-item__positive,
+.transaction-item__negative {
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.transaction-item__positive {
+  color: #166534;
+}
+
+.transaction-item__negative {
+  color: $color-primary-strong;
+}
+
+.transaction-empty {
+  min-height: 180rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-secondary;
+}
