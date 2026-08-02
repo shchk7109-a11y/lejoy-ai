@@ -18,6 +18,12 @@ scroll-view {
   font-size: $font-body;
 }
 
+text,
+button {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 button,
 .clickable {
   min-height: $touch-min;

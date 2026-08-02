@@ -73,7 +73,7 @@
   min-height: 190rpx;
   padding: 32rpx 40rpx;
   display: grid;
-  grid-template-columns: 110rpx 1fr;
+  grid-template-columns: 110rpx minmax(0, 1fr);
   align-items: center;
   column-gap: 26rpx;
 }
@@ -208,7 +208,7 @@
 .compare-grid {
   margin: 32rpx 0;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20rpx;
 }
 
@@ -243,7 +243,7 @@
 .result-actions {
   margin-top: 24rpx;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 20rpx;
 }
 

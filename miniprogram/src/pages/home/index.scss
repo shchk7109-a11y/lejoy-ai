@@ -121,6 +121,40 @@
   text-align: center;
 }
 
+.zero-credit-tip {
+  margin-bottom: 34rpx;
+  padding: 30rpx;
+  border: 4rpx solid #f59e0b;
+  border-radius: $radius-card;
+  background: #fffbeb;
+}
+
+.zero-credit-tip__title,
+.zero-credit-tip__body,
+.zero-credit-tip__help {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.zero-credit-tip__title {
+  color: #92400e;
+  font-size: $font-title;
+  font-weight: 900;
+}
+
+.zero-credit-tip__body,
+.zero-credit-tip__help {
+  margin-top: 12rpx;
+  color: $color-secondary;
+  font-size: $font-body;
+  line-height: 1.6;
+}
+
+.zero-credit-tip__help {
+  color: $color-primary-strong;
+  font-weight: 700;
+}
+
 .module-list {
   display: flex;
   flex-direction: column;

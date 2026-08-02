@@ -69,6 +69,13 @@ export default function HomePage() {
         </View>
 
         {loading ? <Text className="home-page__loading">正在加载，请稍候…</Text> : null}
+        {user?.credits === 0 ? (
+          <View className="zero-credit-tip">
+            <Text className="zero-credit-tip__title">积分暂时为 0</Text>
+            <Text className="zero-credit-tip__body">部分 AI 功能需要积分，当前可先查看功能介绍。</Text>
+            <Text className="zero-credit-tip__help">如何获取积分：TODO（运营配置积分获取方式）</Text>
+          </View>
+        ) : null}
         <View className="module-list">
           {modules.map((module) => (
             <View
