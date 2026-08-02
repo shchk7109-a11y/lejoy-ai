@@ -66,6 +66,14 @@ const OUTPUT_DRUG_NAMES = [
   "胰岛素",
 ] as const;
 
+const OUTPUT_RESTRICTED_TOPICS = [
+  "保健品",
+  "膳食补充剂",
+  "营养补充剂",
+  "治疗方案",
+  "治疗方法",
+] as const;
+
 const OUTPUT_DOSAGE_PATTERNS = [
   /(?:\d+(?:\.\d+)?\s*(?:mg|ml)\b|\d+(?:\.\d+)?\s*(?:毫克|毫升))/i,
   /(?:每日|每天)\s*[一二两三四五六七八九十\d]+\s*次/,
@@ -88,6 +96,7 @@ export function blocksChatInput(input: string, extraKeywords: readonly string[] 
 export function blocksChatOutput(output: string): boolean {
   const value = normalized(output);
   return OUTPUT_DRUG_NAMES.some((name) => value.includes(normalized(name)))
+    || OUTPUT_RESTRICTED_TOPICS.some((topic) => value.includes(normalized(topic)))
     || OUTPUT_DOSAGE_PATTERNS.some((pattern) => pattern.test(output));
 }
 

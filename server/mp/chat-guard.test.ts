@@ -57,6 +57,8 @@ describe("万花筒输出红线", () => {
       "可以考虑缬沙坦。",
       "建议使用某品牌鱼油保健品。",
       "建议采用针灸治疗方案。",
+      "某品牌保健品很适合您。",
+      "这套治疗方案值得尝试。",
     ]) {
       expect(blocksChatOutput(output), output).toBe(true);
     }
