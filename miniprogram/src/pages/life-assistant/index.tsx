@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Image, Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
@@ -8,6 +8,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type LifeResult } from "../../services/api";
 import { ensurePrivacyAuthorized } from "../../services/privacy";
+import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
 type Mode = "recipe" | "plant" | "health";
@@ -24,23 +25,34 @@ export default function LifeAssistantPage() {
   const [previewPath, setPreviewPath] = useState("");
   const [result, setResult] = useState<LifeResult>();
   const [busyMessage, setBusyMessage] = useState("");
+  const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
-  async function submitText() {
-    if (!mode || !text.trim() || busyMessage) return;
-    setBusyMessage(mode === "recipe" ? "正在整理菜谱和营养信息…" : "正在查询生活健康百科…");
+  async function submitText(
+    operationId = createOperationId("life-text"),
+    requestedText = text.trim(),
+    requestedMode = mode,
+  ) {
+    if (!requestedMode || !requestedText || busyMessage || operationLockRef.current) return;
+    operationLockRef.current = true;
+    setBusyMessage(requestedMode === "recipe" ? "正在整理菜谱和营养信息…" : "正在查询生活健康百科…");
     try {
-      const data = mode === "recipe" ? await mpApi.getRecipe(text.trim()) : await mpApi.queryHealth({ textHint: text.trim() });
+      const data = requestedMode === "recipe"
+        ? await mpApi.getRecipe(requestedText, operationId)
+        : await mpApi.queryHealth({ textHint: requestedText }, operationId);
       setResult(data);
     } catch (error) {
-      showMpError(error, submitText);
+      showMpError(error, () => submitText(operationId, requestedText, requestedMode));
     } finally {
+      operationLockRef.current = false;
       setBusyMessage("");
     }
   }
 
-  async function chooseAndAnalyze(sourceType: "camera" | "album") {
-    if (!mode || busyMessage) return;
+  async function chooseAndAnalyze(sourceType: "camera" | "album", operationId = createOperationId("life-image")) {
+    if (!mode || busyMessage || operationLockRef.current) return;
+    const selectedMode = mode;
+    operationLockRef.current = true;
     try {
       await ensurePrivacyAuthorized();
       const media = await Taro.chooseMedia({ count: 1, mediaType: ["image"], sourceType: [sourceType], sizeType: ["compressed", "original"] });
@@ -50,14 +62,35 @@ export default function LifeAssistantPage() {
       setPreviewPath(file.tempFilePath);
       setBusyMessage("正在准备图片并识别…");
       const uploaded = await mpApi.uploadImage({ base64: await readBase64(file.tempFilePath), mimeType: imageMime(file.tempFilePath) });
-      const data = mode === "plant"
-        ? await mpApi.identifyPlant(uploaded.fileKey)
-        : await mpApi.queryHealth({ sourceFileKey: uploaded.fileKey });
-      setResult(data);
+      await analyzeUploaded(uploaded.fileKey, selectedMode, operationId);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("cancel")) showMpError(error, () => chooseAndAnalyze(sourceType));
+      if (!message.includes("cancel")) showMpError(error, () => chooseAndAnalyze(sourceType, operationId));
     } finally {
+      operationLockRef.current = false;
+      setBusyMessage("");
+    }
+  }
+
+  async function analyzeUploaded(fileKey: string, selectedMode: Mode, operationId: string): Promise<void> {
+    try {
+      const data = selectedMode === "plant"
+        ? await mpApi.identifyPlant(fileKey, operationId)
+        : await mpApi.queryHealth({ sourceFileKey: fileKey }, operationId);
+      setResult(data);
+    } catch (error) {
+      showMpError(error, () => retryUploadedAnalysis(fileKey, selectedMode, operationId));
+    }
+  }
+
+  async function retryUploadedAnalysis(fileKey: string, selectedMode: Mode, operationId: string): Promise<void> {
+    if (operationLockRef.current) return;
+    operationLockRef.current = true;
+    setBusyMessage("正在重新查询刚才的图片…");
+    try {
+      await analyzeUploaded(fileKey, selectedMode, operationId);
+    } finally {
+      operationLockRef.current = false;
       setBusyMessage("");
     }
   }
@@ -106,7 +139,7 @@ export default function LifeAssistantPage() {
                   onInput={(event) => setText(event.detail.value)}
                 />
                 <VoiceInput onResult={(voiceText) => setText(voiceText.slice(0, 300))} />
-                <Button block size="xlarge" type="primary" disabled={!text.trim()} loading={Boolean(busyMessage)} onClick={submitText}>
+                <Button block size="xlarge" type="primary" disabled={!text.trim()} loading={Boolean(busyMessage)} onClick={() => void submitText()}>
                   {mode === "recipe" ? "生成菜谱营养卡" : "查询百科"}
                 </Button>
               </>

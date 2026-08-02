@@ -34,7 +34,7 @@ const ERROR_COPY: Record<MpErrorKind, Omit<MpApiError, "name" | "kind" | "code">
   },
   timeout: {
     title: "等待时间有点长",
-    message: "本次请求已停止，没有自动重新生成。请稍后手动重试。",
+    message: "当前页面已停止等待，后台可能仍在处理。请稍后手动重试同一次操作。",
   },
   insufficient_credits: {
     title: "积分不足",
@@ -62,6 +62,7 @@ export function normalizeApiError(input: unknown): MpApiError {
 
   if (code === "INSUFFICIENT_CREDITS") kind = "insufficient_credits";
   else if (code === "CONTENT_REJECTED") kind = "content_rejected";
+  else if (code === "AI_TIMEOUT") kind = "timeout";
   else if (lowerMessage.includes("timeout") || lowerMessage.includes("超时")) kind = "timeout";
   else if (
     lowerMessage.includes("network")
@@ -71,6 +72,13 @@ export function normalizeApiError(input: unknown): MpApiError {
 
   const copy = ERROR_COPY[kind];
   return new MpApiError(kind, code, copy.title, copy.message, copy.helpText);
+}
+
+export function createOperationId(prefix = "generate"): string {
+  const safePrefix = prefix.toLowerCase().replace(/[^a-z0-9-]/g, "-").slice(0, 20) || "generate";
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).slice(2, 14).padEnd(12, "0");
+  return `${safePrefix}-${timestamp}-${random}`;
 }
 
 export function shouldAutoRetry(input: {

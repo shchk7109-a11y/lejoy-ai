@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Image, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
@@ -7,6 +7,7 @@ import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type MediaSecurityStatus } from "../../services/api";
 import { ensurePrivacyAuthorized } from "../../services/privacy";
+import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
 const ART_STYLES = [
@@ -51,6 +52,7 @@ export default function SilverLensPage() {
   const [choosingStyle, setChoosingStyle] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
   const [securityStatus, setSecurityStatus] = useState<MediaSecurityStatus>();
+  const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   const busy = Boolean(busyMessage);
@@ -89,19 +91,25 @@ export default function SilverLensPage() {
     }
   }
 
-  async function processImage(mode: "restore" | "transform") {
-    if (!sourceUrl || !sourceFileKey || busy) return;
+  async function processImage(
+    mode: "restore" | "transform",
+    operationId = createOperationId(`silver-${mode}`),
+    requestData = { sourceFileKey, style: selectedStyle },
+  ) {
+    if (!sourceUrl || !requestData.sourceFileKey || busy || operationLockRef.current) return;
+    operationLockRef.current = true;
     setBusyMessage(mode === "restore" ? "正在修复，约需半分钟" : "正在创作艺术照，约需半分钟");
     try {
       const result = mode === "restore"
-        ? await mpApi.restorePhoto({ sourceFileKey })
-        : await mpApi.transformPhoto({ sourceFileKey, style: selectedStyle });
+        ? await mpApi.restorePhoto({ sourceFileKey: requestData.sourceFileKey }, operationId)
+        : await mpApi.transformPhoto({ sourceFileKey: requestData.sourceFileKey, style: requestData.style }, operationId);
       setResultUrl(result.imageUrl);
       setSecurityStatus(result.securityStatus);
       setChoosingStyle(false);
     } catch (error) {
-      showMpError(error, () => processImage(mode));
+      showMpError(error, () => processImage(mode, operationId, requestData));
     } finally {
+      operationLockRef.current = false;
       setBusyMessage("");
     }
   }

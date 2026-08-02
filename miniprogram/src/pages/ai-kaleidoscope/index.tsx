@@ -7,6 +7,7 @@ import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type ChatMessage } from "../../services/api";
+import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
 const NOTICE_KEY = "lejoy_m3_chat_notice_seen";
@@ -17,6 +18,7 @@ export default function KaleidoscopePage() {
   const [busy, setBusy] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
+  const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   useEffect(() => {
@@ -31,37 +33,41 @@ export default function KaleidoscopePage() {
     return () => audioRef.current?.destroy();
   }, []);
 
-  async function sendMessage() {
+  async function sendMessage(operationId = createOperationId("chat")) {
     const message = input.trim();
-    if (!message || busy) return;
+    if (!message || busy || operationLockRef.current) return;
+    operationLockRef.current = true;
     const history = messages.slice(-12);
     setMessages((current) => [...current, { role: "user", content: message }]);
     setInput("");
     setBusy(true);
     try {
-      const result = await mpApi.chat(message, history);
+      const result = await mpApi.chat(message, history, operationId);
       setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
     } catch (error) {
-      showMpError(error, () => retryMessage(message, history));
+      showMpError(error, () => retryMessage(message, history, operationId));
     } finally {
+      operationLockRef.current = false;
       setBusy(false);
     }
   }
 
-  async function retryMessage(message: string, history: ChatMessage[]) {
-    if (busy) return;
+  async function retryMessage(message: string, history: ChatMessage[], operationId: string) {
+    if (busy || operationLockRef.current) return;
+    operationLockRef.current = true;
     setBusy(true);
     try {
-      const result = await mpApi.chat(message, history);
+      const result = await mpApi.chat(message, history, operationId);
       setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
     } catch (error) {
-      showMpError(error, () => retryMessage(message, history));
+      showMpError(error, () => retryMessage(message, history, operationId));
     } finally {
+      operationLockRef.current = false;
       setBusy(false);
     }
   }
 
-  async function speak(content: string, index: number) {
+  async function speak(content: string, index: number, operationId = createOperationId("chat-speech")) {
     if (speakingIndex === index) {
       audioRef.current?.stop();
       setSpeakingIndex(undefined);
@@ -73,7 +79,7 @@ export default function KaleidoscopePage() {
         text: content,
         voiceType: "gentle",
         isFirstPage: false,
-      });
+      }, operationId);
       audioRef.current?.destroy();
       const audio = Taro.createInnerAudioContext();
       audioRef.current = audio;
@@ -83,7 +89,7 @@ export default function KaleidoscopePage() {
       setSpeakingIndex(index);
       audio.play();
     } catch (error) {
-      showMpError(error, () => speak(content, index));
+      showMpError(error, () => speak(content, index, operationId));
     }
   }
 
@@ -116,7 +122,7 @@ export default function KaleidoscopePage() {
       <View className="chat-compose">
         <Textarea className="chat-input" value={input} maxlength={500} autoHeight placeholder="输入想聊的生活常识…" onInput={(event) => setInput(event.detail.value)} />
         <VoiceInput onResult={(text) => setInput(text.slice(0, 500))} />
-        <Button block size="xlarge" type="primary" disabled={!input.trim() || busy} loading={busy} onClick={sendMessage}>发送</Button>
+        <Button block size="xlarge" type="primary" disabled={!input.trim() || busy} loading={busy} onClick={() => void sendMessage()}>发送</Button>
       </View>
       <AigcBadge />
     </View>

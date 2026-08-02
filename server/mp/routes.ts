@@ -16,7 +16,13 @@ import { checkTextSecurity, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
 import { createM2Router, defaultM2Dependencies } from "./m2-routes";
 import { createM3Router, defaultM3Dependencies, type M3Dependencies } from "./m3-routes";
-import { createMpRequestLogMiddleware, MP_API_VERSION, type MpRequestLogSink } from "./operations";
+import {
+  createMpIdempotencyMiddleware,
+  createMpRequestLogMiddleware,
+  MP_API_VERSION,
+  sendMpTimeoutError,
+  type MpRequestLogSink,
+} from "./operations";
 
 type Transaction = Awaited<ReturnType<typeof getUserTransactions>>[number];
 
@@ -85,6 +91,7 @@ export function createMpRouter(
   const requireAuth = createMpAuthMiddleware(deps.jwtSecret, deps.getUserById);
 
   router.use(createMpRequestLogMiddleware(deps.requestLog));
+  router.use(createMpIdempotencyMiddleware());
   router.get("/health", (_req, res) => {
     res.json({ ok: true, version: MP_API_VERSION });
   });
@@ -189,7 +196,8 @@ export function createMpRouter(
     res.json({ transactions });
   }));
 
-  router.use((_error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (sendMpTimeoutError(error, res)) return;
     res.status(500).json({ error: { code: "INTERNAL_ERROR", message: "服务暂时不可用，请稍后重试" } });
   });
 

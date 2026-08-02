@@ -7,6 +7,7 @@ import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
+import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
 const STORY_THEMES = [
@@ -27,6 +28,8 @@ const STORY_VOICES = [
 ] as const;
 
 type Step = "theme" | "child" | "topics" | "result";
+type StoryImagePlan = { page: StoryPage; operationId: string };
+type StorySpeechPlan = { pageNumber: number; operationId: string };
 
 export default function StoryTimePage() {
   const [step, setStep] = useState<Step>("theme");
@@ -42,28 +45,50 @@ export default function StoryTimePage() {
   const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
   const [playingPage, setPlayingPage] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
+  const operationLockRef = useRef(false);
+  const pagesRef = useRef<StoryPage[]>([]);
+  const speechGeneratingRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
-  async function loadTopics() {
-    if (!theme || busyMessage) return;
+  function replacePages(nextPages: StoryPage[]): void {
+    pagesRef.current = nextPages;
+    setPages(nextPages);
+  }
+
+  function savePagePatch(pageNumber: number, patch: Partial<StoryPage>): StoryPage[] {
+    const nextPages = pagesRef.current.map((page) => (
+      page.pageNumber === pageNumber ? { ...page, ...patch } : page
+    ));
+    pagesRef.current = nextPages;
+    setPages((current) => current.map((page) => (
+      page.pageNumber === pageNumber ? { ...page, ...patch } : page
+    )));
+    return nextPages;
+  }
+
+  async function loadTopics(operationId = createOperationId("story-topics")) {
+    if (!theme || busyMessage || operationLockRef.current) return;
+    operationLockRef.current = true;
     setBusyMessage("正在为孩子想故事题材…");
     try {
       const result = await mpApi.suggestStoryTopics({
         theme,
         childName: childName.trim() || undefined,
         age: Number(age) || 6,
-      });
+      }, operationId);
       setTopics(result.topics);
       setStep("topics");
     } catch (error) {
-      showMpError(error, loadTopics);
+      showMpError(error, () => loadTopics(operationId));
     } finally {
+      operationLockRef.current = false;
       setBusyMessage("");
     }
   }
 
-  async function generateStory(topic: StoryTopic) {
-    if (busyMessage || illustrating) return;
+  async function generateStory(topic: StoryTopic, operationId = createOperationId("story-structure")) {
+    if (busyMessage || illustrating || operationLockRef.current) return;
+    operationLockRef.current = true;
     setBusyMessage("先写四页故事，请稍候…");
     try {
       const story = await mpApi.generateStoryStructure({
@@ -72,60 +97,60 @@ export default function StoryTimePage() {
         childName: childName.trim() || undefined,
         age: Number(age) || 6,
         protagonist: topic.protagonist,
-      });
+      }, operationId);
       setTitle(story.title);
-      setPages(story.pages);
+      replacePages(story.pages);
       setStep("result");
       setBusyMessage("");
-      setIllustrating(true);
       setFailedImagePages([]);
-      const imageResults = await Promise.all(story.pages.map(async (page) => {
-        try {
-          const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
-          setPages((current) => current.map((currentPage) => (
-            currentPage.pageNumber === page.pageNumber ? { ...currentPage, imageUrl: image.imageUrl } : currentPage
-          )));
-          return true;
-        } catch (error) {
-          setFailedImagePages((current) => current.includes(page.pageNumber) ? current : [...current, page.pageNumber]);
-          showMpError(error, () => generateStoryPageImage(page));
-          return false;
-        }
-      }));
-      if (imageResults.some((success) => !success)) {
-        await Taro.showToast({ title: "部分配图失败，请重新生成故事", icon: "none", duration: 3000 });
-      }
+      await retryStoryImages(story.pages.map((page) => ({
+        page,
+        operationId: createOperationId(`story-image-${page.pageNumber}`),
+      })));
     } catch (error) {
-      showMpError(error, () => generateStory(topic));
+      showMpError(error, () => generateStory(topic, operationId));
     } finally {
+      operationLockRef.current = false;
       setBusyMessage("");
-      setIllustrating(false);
     }
   }
 
   async function prepareAndPlay() {
     if (!pages.length || busyMessage || illustrating) return;
-    setBusyMessage("正在准备四页朗读…");
+    const plans = pages
+      .filter((page) => !page.audioUrl)
+      .map((page) => ({ pageNumber: page.pageNumber, operationId: createOperationId(`story-speech-${page.pageNumber}`) }));
+    if (!plans.length) playSequence(pagesRef.current, 0);
+    else await generateStorySpeeches(plans);
+  }
+
+  async function generateStorySpeeches(plans: StorySpeechPlan[]): Promise<void> {
+    if (speechGeneratingRef.current) return;
+    speechGeneratingRef.current = true;
+    setBusyMessage("正在逐页准备朗读…");
     try {
-      let readyPages = pages;
-      if (pages.some((page) => !page.audioUrl)) {
-        const speeches = await Promise.all(pages.map((page, index) => mpApi.generateStoryPageSpeech({
-          pageNumber: page.pageNumber,
-          text: page.text,
-          voiceType,
-          isFirstPage: index === 0,
-          title: index === 0 ? title : undefined,
-        })));
-        readyPages = pages.map((page) => ({
-          ...page,
-          audioUrl: speeches.find((speech) => speech.pageNumber === page.pageNumber)?.audioUrl,
-        }));
-        setPages(readyPages);
+      for (let index = 0; index < plans.length; index += 1) {
+        const plan = plans[index];
+        const page = pagesRef.current.find((item) => item.pageNumber === plan.pageNumber);
+        if (!page || page.audioUrl) continue;
+        try {
+          const speech = await mpApi.generateStoryPageSpeech({
+            pageNumber: page.pageNumber,
+            text: page.text,
+            voiceType,
+            isFirstPage: page.pageNumber === 1,
+            title: page.pageNumber === 1 ? title : undefined,
+          }, plan.operationId);
+          savePagePatch(page.pageNumber, { audioUrl: speech.audioUrl });
+        } catch (error) {
+          const remainingPlans = plans.slice(index);
+          showMpError(error, () => generateStorySpeeches(remainingPlans));
+          return;
+        }
       }
-      playSequence(readyPages, 0);
-    } catch (error) {
-      showMpError(error, prepareAndPlay);
+      playSequence(pagesRef.current, 0);
     } finally {
+      speechGeneratingRef.current = false;
       setBusyMessage("");
     }
   }
@@ -149,15 +174,30 @@ export default function StoryTimePage() {
     audio.play();
   }
 
-  async function generateStoryPageImage(page: StoryPage) {
+  async function retryStoryImages(plans: StoryImagePlan[]): Promise<void> {
+    if (!plans.length) return;
+    setIllustrating(true);
+    const failures: Array<StoryImagePlan & { error: unknown }> = [];
     try {
-      const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
-      setPages((current) => current.map((currentPage) => (
-        currentPage.pageNumber === page.pageNumber ? { ...currentPage, imageUrl: image.imageUrl } : currentPage
-      )));
-      setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== page.pageNumber));
-    } catch (error) {
-      showMpError(error, () => generateStoryPageImage(page));
+      await Promise.all(plans.map(async (plan) => {
+        try {
+          const image = await mpApi.generateStoryPageImage({
+            imagePrompt: plan.page.imagePrompt,
+            pageNumber: plan.page.pageNumber,
+          }, plan.operationId);
+          savePagePatch(plan.page.pageNumber, { imageUrl: image.imageUrl });
+        } catch (error) {
+          failures.push({ ...plan, error });
+        }
+      }));
+      setFailedImagePages(failures.map((failure) => failure.page.pageNumber));
+      if (failures.length) {
+        const retryPlans = failures.map(({ page, operationId }) => ({ page, operationId }));
+        showMpError(failures[0].error, () => retryStoryImages(retryPlans));
+        await Taro.showToast({ title: `有 ${failures.length} 页配图未完成，可手动重试`, icon: "none", duration: 3000 });
+      }
+    } finally {
+      setIllustrating(false);
     }
   }
 
@@ -167,7 +207,7 @@ export default function StoryTimePage() {
     setTheme("");
     setTopics([]);
     setTitle("");
-    setPages([]);
+    replacePages([]);
     setIllustrating(false);
     setFailedImagePages([]);
     setPlayingPage(undefined);
@@ -204,7 +244,7 @@ export default function StoryTimePage() {
             <Text className="story-label">年龄（1 至 12 岁）</Text>
             <Input className="story-input" value={age} type="number" maxlength={2} onInput={(event) => setAge(event.detail.value)} />
             <VoiceInput onResult={(text) => setChildName(text.slice(0, 20))} />
-            <Button block size="xlarge" type="primary" loading={Boolean(busyMessage)} onClick={loadTopics}>继续选题材</Button>
+            <Button block size="xlarge" type="primary" loading={Boolean(busyMessage)} onClick={() => void loadTopics()}>继续选题材</Button>
           </View>
         ) : null}
 
@@ -228,7 +268,7 @@ export default function StoryTimePage() {
           <View className="story-result">
             <Text className="story-result__title">{title}</Text>
             <Text className="story-result__tip">
-              {illustrating ? "四页文字已完成，正在逐页补图…" : failedImagePages.length ? `有 ${failedImagePages.length} 页配图未完成，请重新讲一个故事` : "共 4 页，文字和图片已准备好"}
+              {illustrating ? "四页文字已完成，正在逐页补图…" : failedImagePages.length ? `有 ${failedImagePages.length} 页配图未完成，请手动重试配图` : "共 4 页，文字和图片已准备好"}
             </Text>
             {pages.map((page) => (
               <View key={page.pageNumber} className={`story-card ${playingPage === page.pageNumber ? "story-card--playing" : ""}`}>

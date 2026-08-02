@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Text, View } from "@tarojs/components";
 import { Button } from "@nutui/nutui-react-taro";
 import { normalizeApiError, type MpApiError } from "../../services/request-policy";
@@ -9,6 +9,7 @@ type MpErrorState = { error: MpApiError; retry: RetryAction };
 
 export function useMpError() {
   const [errorState, setErrorState] = useState<MpErrorState>();
+  const retryingRef = useRef(false);
 
   function showMpError(error: unknown, retry: RetryAction) {
     setErrorState({ error: normalizeApiError(error), retry });
@@ -19,9 +20,14 @@ export function useMpError() {
   }
 
   function retryError() {
+    if (retryingRef.current) return;
     const retry = errorState?.retry;
+    if (!retry) return;
+    retryingRef.current = true;
     setErrorState(undefined);
-    if (retry) void retry();
+    void Promise.resolve(retry()).finally(() => {
+      retryingRef.current = false;
+    });
   }
 
   return { errorState, showMpError, dismissError, retryError };

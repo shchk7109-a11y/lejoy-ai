@@ -60,6 +60,7 @@ async function request<T>(path: string, options: {
   data?: unknown;
   auth?: boolean;
   retry?: "safe" | "never";
+  operationId?: string;
 } = {}): Promise<T> {
   const token = getToken();
   const method = options.method ?? "GET";
@@ -75,6 +76,7 @@ async function request<T>(path: string, options: {
         header: {
           "content-type": "application/json",
           ...(options.auth !== false && token ? { authorization: `Bearer ${token}` } : {}),
+          ...(options.operationId ? { "x-idempotency-key": options.operationId } : {}),
         },
       });
       if (response.statusCode === 401) {
@@ -103,33 +105,33 @@ export const mpApi = {
   }),
   me: () => request<MpUser>("/api/mp/user/me"),
   modules: () => request<{ modules: MpModule[] }>("/api/mp/modules"),
-  generateCopywriter: (data: { scenario: string; relationship: string; tone: string; customContext?: string }) =>
-    request<{ wishes: string[]; credits: number }>("/api/mp/copywriter/generate", { method: "POST", data, retry: "never" }),
+  generateCopywriter: (data: { scenario: string; relationship: string; tone: string; customContext?: string }, operationId?: string) =>
+    request<{ wishes: string[]; credits: number }>("/api/mp/copywriter/generate", { method: "POST", data, retry: "never", operationId }),
   creditHistory: () => request<{ transactions: CreditTransaction[] }>("/api/mp/credits/history"),
   uploadImage: (data: { base64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" }) =>
     request<{ url: string; fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/upload/image", { method: "POST", data, retry: "never" }),
   uploadAudio: (data: { base64: string; mimeType: "audio/mpeg" }) =>
     request<{ url: string; fileKey: string }>("/api/mp/upload/audio", { method: "POST", data, retry: "never" }),
-  restorePhoto: (data: { sourceFileKey: string; prompt?: string }) =>
-    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data, retry: "never" }),
-  transformPhoto: (data: { sourceFileKey: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }) =>
-    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data, retry: "never" }),
+  restorePhoto: (data: { sourceFileKey: string; prompt?: string }, operationId?: string) =>
+    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data, retry: "never", operationId }),
+  transformPhoto: (data: { sourceFileKey: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }, operationId?: string) =>
+    request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data, retry: "never", operationId }),
   transcribeAudio: (fileKey: string) =>
     request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { fileKey, language: "zh" }, retry: "never" }),
-  suggestStoryTopics: (data: { theme: string; childName?: string; age?: number; customProtagonist?: string }) =>
-    request<{ topics: StoryTopic[] }>("/api/mp/story/suggest-topics", { method: "POST", data, retry: "never" }),
-  generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }) =>
-    request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data, retry: "never" }),
-  generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number }) =>
-    request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", { method: "POST", data, retry: "never" }),
-  generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }) =>
-    request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never" }),
-  getRecipe: (foodName: string) =>
-    request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never" }),
-  identifyPlant: (sourceFileKey: string) =>
-    request<LifeResult>("/api/mp/life/identify", { method: "POST", data: { sourceFileKey }, retry: "never" }),
-  queryHealth: (data: { textHint?: string; sourceFileKey?: string }) =>
-    request<LifeResult>("/api/mp/life/health", { method: "POST", data, retry: "never" }),
-  chat: (message: string, history: ChatMessage[]) =>
-    request<{ reply: string; credits: number; guarded: boolean }>("/api/mp/chat", { method: "POST", data: { message, history }, retry: "never" }),
+  suggestStoryTopics: (data: { theme: string; childName?: string; age?: number; customProtagonist?: string }, operationId?: string) =>
+    request<{ topics: StoryTopic[] }>("/api/mp/story/suggest-topics", { method: "POST", data, retry: "never", operationId }),
+  generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }, operationId?: string) =>
+    request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data, retry: "never", operationId }),
+  generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number }, operationId?: string) =>
+    request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", { method: "POST", data, retry: "never", operationId }),
+  generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }, operationId?: string) =>
+    request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never", operationId }),
+  getRecipe: (foodName: string, operationId?: string) =>
+    request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never", operationId }),
+  identifyPlant: (sourceFileKey: string, operationId?: string) =>
+    request<LifeResult>("/api/mp/life/identify", { method: "POST", data: { sourceFileKey }, retry: "never", operationId }),
+  queryHealth: (data: { textHint?: string; sourceFileKey?: string }, operationId?: string) =>
+    request<LifeResult>("/api/mp/life/health", { method: "POST", data, retry: "never", operationId }),
+  chat: (message: string, history: ChatMessage[], operationId?: string) =>
+    request<{ reply: string; credits: number; guarded: boolean }>("/api/mp/chat", { method: "POST", data: { message, history }, retry: "never", operationId }),
 };

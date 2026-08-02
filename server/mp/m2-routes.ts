@@ -9,6 +9,7 @@ import { storageDelete, storageGet, storagePut } from "../storage";
 import { createMediaCheckTask, findMediaCheckTask, findMediaCheckTaskByFile, updateMediaCheckTaskStatus } from "./media-check-tasks";
 import { checkMediaSecurity, type MediaSecuritySubmission } from "./security";
 import type { MpAuthenticatedRequest } from "./auth";
+import { sendMpTimeoutError } from "./operations";
 import { resolveWechatMediaStatus, verifyWechatSignature, type MediaCheckStatus } from "./wechat-callback";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -303,6 +304,7 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   }));
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (sendMpTimeoutError(error, res)) return;
     if (error instanceof Error && error.message.includes("积分不足")) {
       res.status(402).json({ error: { code: "INSUFFICIENT_CREDITS", message: error.message } });
       return;

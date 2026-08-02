@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
@@ -14,6 +14,7 @@ import {
   type CopywriterStep,
 } from "../../features/copywriter/flow";
 import { mpApi } from "../../services/api";
+import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
 const questions: Record<Exclude<CopywriterStep, "customContext">, { title: string; subtitle: string; options: string[] }> = {
@@ -38,6 +39,7 @@ export default function CopywriterPage() {
   const [flow, setFlow] = useState(initialCopywriterFlow);
   const [wishes, setWishes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
   const question = flow.step === "customContext" ? undefined : questions[flow.step];
   const selected = useMemo(() => flow[flow.step], [flow]);
@@ -46,20 +48,25 @@ export default function CopywriterPage() {
     setFlow((current) => advanceCopywriterFlow(current, option));
   }
 
-  async function generate() {
-    if (!flow.canGenerate || loading) return;
+  async function generate(
+    operationId = createOperationId("copywriter"),
+    requestData = {
+      scenario: flow.scenario,
+      relationship: flow.relationship,
+      tone: flow.tone,
+      customContext: flow.customContext.trim() || undefined,
+    },
+  ) {
+    if (!flow.canGenerate || loading || operationLockRef.current) return;
+    operationLockRef.current = true;
     setLoading(true);
     try {
-      const result = await mpApi.generateCopywriter({
-        scenario: flow.scenario,
-        relationship: flow.relationship,
-        tone: flow.tone,
-        customContext: flow.customContext.trim() || undefined,
-      });
+      const result = await mpApi.generateCopywriter(requestData, operationId);
       setWishes(result.wishes);
     } catch (error) {
-      showMpError(error, generate);
+      showMpError(error, () => generate(operationId, requestData));
     } finally {
+      operationLockRef.current = false;
       setLoading(false);
     }
   }
@@ -120,7 +127,7 @@ export default function CopywriterPage() {
           ) : null}
           {flow.step === "customContext" ? (
             <View className="guide-panel__action">
-              <Button block size="xlarge" type="primary" disabled={!flow.canGenerate} loading={loading} onClick={generate}>
+              <Button block size="xlarge" type="primary" disabled={!flow.canGenerate} loading={loading} onClick={() => void generate()}>
                 生成 3 条暖心文案
               </Button>
             </View>

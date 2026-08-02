@@ -16,6 +16,7 @@ import {
 } from "../minimaxService";
 import { storageDelete, storageGet, storagePut } from "../storage";
 import type { MpAuthenticatedRequest } from "./auth";
+import { sendMpTimeoutError } from "./operations";
 import { appendChatDisclaimer, blocksChatInput, blocksChatOutput } from "./chat-guard";
 import { CHAT_MEDICAL_GUIDANCE, CHAT_SYSTEM_PROMPT } from "./chat-persona";
 import { createMediaCheckTask, findMediaCheckTaskByFile } from "./media-check-tasks";
@@ -403,6 +404,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
   }));
 
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (sendMpTimeoutError(error, res)) return;
     if (error instanceof Error && error.message.includes("积分不足")) {
       res.status(402).json({ error: { code: "INSUFFICIENT_CREDITS", message: error.message } });
       return;

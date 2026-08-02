@@ -17,6 +17,25 @@ describe("M4 五模块统一错误态", () => {
     }
   });
 
+  it("人工重试有同步点击锁，避免双击并发生成", () => {
+    const content = mini("src/components/ErrorState/index.tsx");
+    expect(content).toContain("retryingRef");
+    expect(content).toContain("if (retryingRef.current) return");
+  });
+
+  it("五个模块的生成入口均有同步操作锁", () => {
+    for (const page of modulePages) {
+      expect(mini(`src/pages/${page}/index.tsx`), page).toContain("operationLockRef");
+    }
+  });
+
+  it("故事配图聚合失败页，语音逐页保存且不整批重跑", () => {
+    const content = mini("src/pages/story-time/index.tsx");
+    expect(content).toContain("retryStoryImages");
+    expect(content).toContain("generateStorySpeeches");
+    expect(content).not.toContain("const speeches = await Promise.all(pages.map");
+  });
+
   it("错误卡展示标题、说明、积分帮助和明确重试按钮", () => {
     const component = mini("src/components/ErrorState/index.tsx");
     expect(component).toContain("error.title");
