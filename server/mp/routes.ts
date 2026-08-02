@@ -14,6 +14,7 @@ import { createMpAuthMiddleware, exchangeWechatCode, signMpToken, type MpAuthent
 import { MP_MODULES } from "./modules";
 import { checkTextSecurity, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
+import { createM2Router, defaultM2Dependencies } from "./m2-routes";
 
 type Transaction = Awaited<ReturnType<typeof getUserTransactions>>[number];
 
@@ -119,6 +120,8 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
   router.get("/modules", requireAuth, (_req, res) => {
     res.json({ modules: MP_MODULES });
   });
+
+  router.use(createM2Router(defaultM2Dependencies(), requireAuth));
 
   router.post("/copywriter/generate", requireAuth, asyncRoute(async (req, res) => {
     const parsed = copywriterInputSchema.safeParse(req.body);

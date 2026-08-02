@@ -2,7 +2,7 @@
 // - 配置了 S3_* 环境变量时：使用阿里云 OSS（S3 兼容）/任意 S3 兼容存储（独立部署用）
 // - 否则回落到 Manus Biz 存储代理（遗留链路）
 
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from './_core/env';
 
@@ -57,6 +57,14 @@ async function s3Put(
     })
   );
   return { key, url: await s3PublicUrl(key) };
+}
+
+export async function deleteFromS3(
+  client: { send: (command: DeleteObjectCommand) => Promise<unknown> },
+  bucket: string,
+  relKey: string,
+): Promise<void> {
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: normalizeKey(relKey) }));
 }
 
 // ─── Manus Biz 存储代理（遗留链路）────────────────────────────────────────────
@@ -125,6 +133,24 @@ function buildAuthHeaders(apiKey: string): HeadersInit {
   return { Authorization: `Bearer ${apiKey}` };
 }
 
+export async function deleteFromManus(
+  baseUrl: string,
+  apiKey: string,
+  relKey: string,
+  request: typeof fetch = fetch,
+): Promise<void> {
+  const deleteUrl = new URL("v1/storage/delete", ensureTrailingSlash(baseUrl));
+  deleteUrl.searchParams.set("path", normalizeKey(relKey));
+  const response = await request(deleteUrl, {
+    method: "DELETE",
+    headers: buildAuthHeaders(apiKey),
+  });
+  if (!response.ok) {
+    const message = await response.text().catch(() => response.statusText);
+    throw new Error(`Storage delete failed (${response.status} ${response.statusText}): ${message}`);
+  }
+}
+
 export async function storagePut(
   relKey: string,
   data: Buffer | Uint8Array | string,
@@ -163,4 +189,14 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
+}
+
+export async function storageDelete(relKey: string): Promise<void> {
+  const key = normalizeKey(relKey);
+  if (s3Enabled()) {
+    await deleteFromS3(getS3Client(), ENV.s3Bucket, key);
+    return;
+  }
+  const { baseUrl, apiKey } = getStorageConfig();
+  await deleteFromManus(baseUrl, apiKey, key);
 }

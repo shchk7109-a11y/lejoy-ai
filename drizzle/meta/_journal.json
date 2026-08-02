@@ -15,6 +15,13 @@
       "when": 1775139761635,
       "tag": "0001_premium_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785647640023,
+      "tag": "0002_narrow_wallop",
+      "breakpoints": true
     }
   ]
 }

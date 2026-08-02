@@ -55,6 +55,21 @@ export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type InsertCreditTransaction = typeof creditTransactions.$inferInsert;
 
 /**
+ * 微信异步媒体内容安全任务
+ */
+export const mediaCheckTasks = mysqlTable("media_check_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  traceId: varchar("trace_id", { length: 128 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  fileKey: varchar("fileKey", { length: 512 }).notNull(),
+  status: mysqlEnum("status", ["pending", "pass", "risky"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type MediaCheckTask = typeof mediaCheckTasks.$inferSelect;
+export type InsertMediaCheckTask = typeof mediaCheckTasks.$inferInsert;
+
+/**
  * 客户信息表 - 用于管理员记录客户详细信息
  */
 export const customerInfo = mysqlTable("customer_info", {

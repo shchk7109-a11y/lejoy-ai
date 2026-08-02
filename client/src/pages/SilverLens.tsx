@@ -9,7 +9,7 @@ import ImageUploader from "@/components/ImageUploader";
 import VoiceInput from "@/components/VoiceInput";
 import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
 
-const ART_STYLES = ["油画", "水彩", "素描", "水墨画", "印象派"];
+const ART_STYLES = ["油画", "水彩", "素描", "水墨画", "印象派"] as const;
 
 const QUICK_EDITS = [
   { label: "一键去路人", prompt: "Remove passersby and distractions from the background, keep the main subject clean." },
@@ -27,7 +27,7 @@ export default function SilverLens() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [artStyle, setArtStyle] = useState("油画");
+  const [artStyle, setArtStyle] = useState<(typeof ART_STYLES)[number]>("油画");
   const [zoomImg, setZoomImg] = useState<string | null>(null);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
 

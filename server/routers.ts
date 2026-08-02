@@ -15,6 +15,7 @@ import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from 
 import { storagePut } from "./storage";
 import { ENV } from "./_core/env";
 import { copywriterInputSchema, generateCopywriterWishes } from "./copywriter";
+import { ART_STYLES, buildRestorePrompt, getArtStylePrompt, type ArtStyle } from "./silverlens";
 
 // ─── 管理员权限中间件 ──────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -128,9 +129,7 @@ export const appRouter = router({
     restorePhoto: protectedProcedure
       .input(z.object({ imageUrl: z.string(), prompt: z.string().optional() }))
       .mutation(async ({ input, ctx }) => {
-        const promptText = input.prompt
-          ? `按照以下要求修改这张照片：${input.prompt}。人物面部保持原有特征不变，效果自然真实、高清。`
-          : "修复并增强这张老照片：提升清晰度与光线，修复破损、划痕、噪点与褪色区域，还原自然真实的色彩，人物面部保持原有特征不变，输出专业级照片修复效果。";
+        const promptText = buildRestorePrompt(input.prompt);
         const { value: imageUrl, credits } = await withCreditCharge(
           ctx.user.id,
           CREDIT_COSTS.photo_restore,
@@ -146,16 +145,9 @@ export const appRouter = router({
       }),
 
     transformArt: protectedProcedure
-      .input(z.object({ imageUrl: z.string(), style: z.string() }))
+      .input(z.object({ imageUrl: z.string(), style: z.enum(Object.keys(ART_STYLES) as [ArtStyle, ...ArtStyle[]]) }))
       .mutation(async ({ input, ctx }) => {
-        const stylePrompts: Record<string, string> = {
-          "油画": "把这张照片转换成经典油画风格：厚重的笔触肌理、浓郁的色彩层次，保持人物与构图不变。",
-          "水彩": "把这张照片转换成清新水彩画风格：柔和的色彩晕染、通透梦幻的质感，保持人物与构图不变。",
-          "素描": "把这张照片转换成细腻的铅笔素描风格：清晰的线条、讲究的明暗与光影，保持人物与构图不变。",
-          "水墨画": "把这张照片转换成中国传统水墨画风格：飘逸的笔墨、留白意境、诗意氛围，保持人物与构图不变。",
-          "印象派": "把这张照片转换成莫奈印象派油画风格：松弛而鲜活的笔触、斑斓的光影色彩，保持人物与构图不变。",
-        };
-        const stylePrompt = stylePrompts[input.style] ?? `把这张照片转换成${input.style}艺术风格，保持人物与构图不变。`;
+        const stylePrompt = getArtStylePrompt(input.style);
         const { value: imageUrl, credits } = await withCreditCharge(
           ctx.user.id,
           CREDIT_COSTS.art_transform,

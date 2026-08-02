@@ -6,6 +6,7 @@ export const ENV = {
   wechatMiniSecret: process.env.WECHAT_MINI_SECRET ?? "",
   mpMockLogin: process.env.MP_MOCK_LOGIN === "true",
   contentSecurity: process.env.CONTENT_SECURITY ?? "off",
+  wechatMpCallbackToken: process.env.WECHAT_MP_CALLBACK_TOKEN ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",

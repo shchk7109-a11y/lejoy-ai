@@ -9,7 +9,7 @@ describe("微信内容安全钩子", () => {
     const hooks = createSecurityHooks({ mode: "off", appId: "", secret: "", request });
 
     await expect(hooks.checkTextSecurity("测试文本")).resolves.toEqual({ safe: true });
-    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg")).resolves.toEqual({ safe: true });
+    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg")).resolves.toEqual({ status: "bypassed" });
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -40,7 +40,7 @@ describe("微信内容安全钩子", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, errmsg: "ok", trace_id: "trace-1" }), { status: 200 }));
     const hooks = createSecurityHooks({ mode: "wechat", appId: "wx-appid", secret: "secret", request });
 
-    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg", "user-openid")).resolves.toEqual({ safe: true });
+    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg", "user-openid")).resolves.toEqual({ status: "pending", traceId: "trace-1" });
 
     expect(String(request.mock.calls[1][0])).toContain("media_check_async?access_token=access-2");
     expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toEqual({

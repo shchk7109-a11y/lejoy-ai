@@ -8,7 +8,8 @@ export type SecurityHooksOptions = {
 };
 
 type AccessTokenResponse = { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string };
-type SecurityResponse = { errcode?: number; errmsg?: string; result?: { suggest?: string } };
+type SecurityResponse = { errcode?: number; errmsg?: string; trace_id?: string; result?: { suggest?: string } };
+export type MediaSecuritySubmission = { status: "bypassed" } | { status: "pending"; traceId: string };
 
 export function createSecurityHooks(options: SecurityHooksOptions) {
   const request = options.request ?? fetch;
@@ -47,8 +48,8 @@ export function createSecurityHooks(options: SecurityHooksOptions) {
       : { safe: true };
   }
 
-  async function checkMediaSecurity(url: string, openId?: string): Promise<SecurityCheckResult> {
-    if (options.mode !== "wechat") return { safe: true };
+  async function checkMediaSecurity(url: string, openId?: string): Promise<MediaSecuritySubmission> {
+    if (options.mode !== "wechat") return { status: "bypassed" };
     if (!openId) throw new Error("微信媒体安全检查需要用户 openid");
     const token = await getAccessToken();
     const response = await request(`https://api.weixin.qq.com/wxa/media_check_async?access_token=${encodeURIComponent(token)}`, {
@@ -58,10 +59,9 @@ export function createSecurityHooks(options: SecurityHooksOptions) {
     });
     if (!response.ok) throw new Error(`微信媒体安全请求失败：HTTP ${response.status}`);
     const data = await response.json() as SecurityResponse;
-    if (data.errcode && data.errcode !== 0) {
-      return { safe: false, reason: data.errmsg ?? "微信媒体安全检查未通过" };
-    }
-    return { safe: true };
+    if (data.errcode && data.errcode !== 0) throw new Error(`微信媒体安全检查提交失败：${data.errmsg ?? data.errcode}`);
+    if (!data.trace_id) throw new Error("微信媒体安全检查提交失败：缺少 trace_id");
+    return { status: "pending", traceId: data.trace_id };
   }
 
   return { checkTextSecurity, checkMediaSecurity };
