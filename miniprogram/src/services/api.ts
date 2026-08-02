@@ -1,7 +1,7 @@
 import Taro from "@tarojs/taro";
 import { clearSession, getToken } from "../store/auth";
 
-const API_BASE_URL = process.env.TARO_APP_API_BASE_URL || "http://127.0.0.1:3000";
+const API_BASE_URL = __LEJOY_API_BASE_URL__;
 
 export type MpUser = {
   id: number;

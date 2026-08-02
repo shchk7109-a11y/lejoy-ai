@@ -11,6 +11,11 @@ const config: UserConfigExport = {
   },
   sourceRoot: "src",
   outputRoot: "dist",
+  defineConstants: {
+    __LEJOY_API_BASE_URL__: JSON.stringify(
+      process.env.TARO_APP_API_BASE_URL || "http://127.0.0.1:3000",
+    ),
+  },
   framework: "react",
   compiler: {
     type: "webpack5",
