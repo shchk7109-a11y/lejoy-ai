@@ -1,0 +1,33 @@
+@use "../../styles/tokens.scss" as *;
+
+.story-page { min-height: 100vh; padding-bottom: 140rpx; background: $color-page; }
+.story-content { padding: 40rpx $page-padding; }
+.story-step { display: block; color: #1d4ed8; font-size: $font-secondary; font-weight: 700; }
+.story-title { display: block; margin: 18rpx 0 36rpx; font-size: $font-hero; font-weight: 800; line-height: 1.35; }
+.story-option-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24rpx; }
+.story-option { min-height: 220rpx; padding: 28rpx 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 3rpx solid #bfdbfe; border-radius: $radius-card; background: #dbeafe; text-align: center; }
+.story-option__emoji { font-size: 64rpx; }
+.story-option__name { margin-top: 12rpx; color: #1d4ed8; font-size: 40rpx; font-weight: 800; }
+.story-option__tip { margin-top: 8rpx; color: #475569; font-size: $font-secondary; line-height: 1.4; }
+.story-label { display: block; margin: 30rpx 0 14rpx; color: #1e3a8a; font-size: $font-body; font-weight: 700; }
+.story-input { min-height: 108rpx; padding: 22rpx 28rpx; border: 3rpx solid #bfdbfe; border-radius: 32rpx; background: #fff; font-size: $font-body; }
+.topic-list { display: flex; flex-direction: column; gap: 24rpx; }
+.topic-card { padding: 30rpx; border: 3rpx solid #bfdbfe; border-radius: $radius-card; background: #eff6ff; }
+.topic-card__title { display: block; color: #1d4ed8; font-size: $font-title; font-weight: 800; }
+.topic-card__description, .topic-card__protagonist { display: block; margin-top: 12rpx; color: #475569; font-size: $font-secondary; line-height: 1.5; }
+.story-result__title { display: block; color: #1e3a8a; font-size: $font-hero; font-weight: 800; text-align: center; }
+.story-result__tip { display: block; margin: 14rpx 0 30rpx; color: #64748b; font-size: $font-secondary; text-align: center; }
+.story-card { margin-bottom: 30rpx; overflow: hidden; border: 4rpx solid #bfdbfe; border-radius: $radius-card; background: #fff; }
+.story-card--playing { border-color: #2563eb; box-shadow: 0 0 0 8rpx rgba(37, 99, 235, .12); }
+.story-card__number { display: block; padding: 20rpx 26rpx; color: #1d4ed8; font-size: $font-secondary; font-weight: 800; }
+.story-card__image, .story-card__placeholder { width: 100%; height: 560rpx; }
+.story-card__placeholder { display: flex; align-items: center; justify-content: center; background: #eff6ff; color: #475569; }
+.story-card__text { display: block; padding: 28rpx; font-size: $font-body; line-height: 1.75; }
+.voice-grid { margin-bottom: 32rpx; display: grid; grid-template-columns: 1fr 1fr; gap: 18rpx; }
+.voice-card { min-height: 108rpx; padding: 18rpx; display: flex; align-items: center; gap: 12rpx; border: 3rpx solid #bfdbfe; border-radius: 32rpx; background: #fff; font-size: $font-secondary; font-weight: 700; }
+.voice-card--selected { border-color: #2563eb; background: #dbeafe; color: #1d4ed8; }
+.story-restart { margin-top: 24rpx; display: flex; align-items: center; justify-content: center; color: #1d4ed8; font-weight: 700; }
+.story-loading { position: fixed; inset: 0; z-index: 20; padding: 60rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28rpx; background: rgba(250, 249, 245, .94); color: #1e3a8a; font-size: $font-title; font-weight: 800; text-align: center; }
+.story-loading__spinner { width: 100rpx; height: 100rpx; border: 12rpx solid #bfdbfe; border-top-color: #2563eb; border-radius: 50%; animation: story-spin 1s linear infinite; }
+.story-loading__tip { color: #64748b; font-size: $font-secondary; font-weight: 500; }
+@keyframes story-spin { to { transform: rotate(360deg); } }

@@ -33,6 +33,21 @@ export type CreditTransaction = {
 
 type ApiError = { code?: string; message?: string; error?: { code?: string; message?: string } };
 export type MediaSecurityStatus = "bypassed" | "pending";
+export type StoryTopic = { title: string; description: string; protagonist: string };
+export type StoryPage = { pageNumber: number; text: string; imagePrompt: string; imageUrl?: string; audioUrl?: string };
+export type LifeResult = {
+  title: string;
+  description: string;
+  tags: string[];
+  details: string[];
+  advice?: string;
+  healthyScore?: number;
+  nutrition?: Record<string, string>;
+  imageUrl?: string;
+  securityStatus?: MediaSecurityStatus;
+  credits: number;
+};
+export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 async function request<T>(path: string, options: { method?: "GET" | "POST"; data?: unknown; auth?: boolean } = {}): Promise<T> {
   const token = getToken();
@@ -77,4 +92,20 @@ export const mpApi = {
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data }),
   transcribeAudio: (fileKey: string) =>
     request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { fileKey, language: "zh" } }),
+  suggestStoryTopics: (data: { theme: string; childName?: string; age?: number; customProtagonist?: string }) =>
+    request<{ topics: StoryTopic[] }>("/api/mp/story/suggest-topics", { method: "POST", data }),
+  generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }) =>
+    request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data }),
+  generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number }) =>
+    request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", { method: "POST", data }),
+  generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }) =>
+    request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data }),
+  getRecipe: (foodName: string) =>
+    request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName } }),
+  identifyPlant: (sourceFileKey: string) =>
+    request<LifeResult>("/api/mp/life/identify", { method: "POST", data: { sourceFileKey } }),
+  queryHealth: (data: { textHint?: string; sourceFileKey?: string }) =>
+    request<LifeResult>("/api/mp/life/health", { method: "POST", data }),
+  chat: (message: string, history: ChatMessage[]) =>
+    request<{ reply: string; credits: number; guarded: boolean }>("/api/mp/chat", { method: "POST", data: { message, history } }),
 };

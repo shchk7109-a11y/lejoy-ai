@@ -19,6 +19,13 @@ describe("首页模块注册表", () => {
       name: "AI 摄影师",
       enabled: false,
     });
+    expect(MP_MODULES.find((module) => module.id === "story-time")).toMatchObject({ enabled: true });
+    expect(MP_MODULES.find((module) => module.id === "life-assistant")).toMatchObject({ enabled: true });
+    expect(MP_MODULES.find((module) => module.id === "ai-kaleidoscope")).toMatchObject({
+      enabled: true,
+      description: "生活百科，陪您聊聊",
+    });
+    expect(MP_MODULES.filter((module) => module.enabled)).toHaveLength(5);
     const removedLegacyName = ["旅游", "达人"].join("");
     expect(MP_MODULES.some((module) => module.name.includes(removedLegacyName))).toBe(false);
     expect(MP_MODULES.every((module) => module.theme)).toBe(true);

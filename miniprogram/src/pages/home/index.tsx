@@ -5,6 +5,14 @@ import { mpApi, type MpModule, type MpUser } from "../../services/api";
 import { clearSession } from "../../store/auth";
 import "./index.scss";
 
+const MODULE_ROUTES: Record<string, string> = {
+  "silver-lens": "/pages/silver-lens/index",
+  "copy-writer": "/pages/copywriter/index",
+  "story-time": "/pages/story-time/index",
+  "life-assistant": "/pages/life-assistant/index",
+  "ai-kaleidoscope": "/pages/ai-kaleidoscope/index",
+};
+
 export default function HomePage() {
   const [user, setUser] = useState<MpUser>();
   const [modules, setModules] = useState<MpModule[]>([]);
@@ -32,11 +40,8 @@ export default function HomePage() {
       await Taro.showToast({ title: "即将上线", icon: "none" });
       return;
     }
-    if (module.id === "copy-writer") {
-      await Taro.navigateTo({ url: "/pages/copywriter/index" });
-    } else if (module.id === "silver-lens") {
-      await Taro.navigateTo({ url: "/pages/silver-lens/index" });
-    }
+    const route = MODULE_ROUTES[module.id];
+    if (route) await Taro.navigateTo({ url: route });
   }
 
   async function logout() {
