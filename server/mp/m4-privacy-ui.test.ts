@@ -6,13 +6,21 @@ function source(relativePath: string): string {
 }
 
 describe("M4 小程序隐私授权", () => {
-  it("声明相机、相册和麦克风用途，不把非位置 API 误填入 requiredPrivateInfos", () => {
+  it("不把相机、相册和麦克风 scope 误填入 app permission，并保留运行时用途说明", () => {
     const appConfig = source("app.config.ts");
+    const voice = source("components/VoiceInput/index.tsx");
+    const silverLens = source("pages/silver-lens/index.tsx");
+
     expect(appConfig).toContain("requiredPrivateInfos: []");
     expect(appConfig).not.toMatch(/requiredPrivateInfos:\s*\[[^\]]*(chooseMedia|saveImageToPhotosAlbum|getRecorderManager)/s);
-    expect(appConfig).toContain('"scope.camera": { desc: "用于拍摄需要修复或识别的照片" }');
-    expect(appConfig).toContain('"scope.writePhotosAlbum": { desc: "用于把处理后的照片保存到您的相册" }');
-    expect(appConfig).toContain('"scope.record": { desc: "用于把您说的话转换成文字" }');
+    expect(appConfig).not.toContain("permission:");
+    expect(appConfig).not.toContain("scope.camera");
+    expect(appConfig).not.toContain("scope.writePhotosAlbum");
+    expect(appConfig).not.toContain("scope.record");
+    expect(voice).toContain("需要麦克风权限");
+    expect(voice).toContain("请在设置中允许使用麦克风");
+    expect(silverLens).toContain("需要相机或相册权限");
+    expect(silverLens).toContain("需要保存权限");
   });
 
   it("隐私授权封装支持低版本基础库降级", () => {
