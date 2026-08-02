@@ -3,6 +3,7 @@ import { Image, Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
+import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type LifeResult } from "../../services/api";
@@ -23,6 +24,7 @@ export default function LifeAssistantPage() {
   const [previewPath, setPreviewPath] = useState("");
   const [result, setResult] = useState<LifeResult>();
   const [busyMessage, setBusyMessage] = useState("");
+  const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   async function submitText() {
     if (!mode || !text.trim() || busyMessage) return;
@@ -31,7 +33,7 @@ export default function LifeAssistantPage() {
       const data = mode === "recipe" ? await mpApi.getRecipe(text.trim()) : await mpApi.queryHealth({ textHint: text.trim() });
       setResult(data);
     } catch (error) {
-      await showError(error);
+      showMpError(error, submitText);
     } finally {
       setBusyMessage("");
     }
@@ -54,7 +56,7 @@ export default function LifeAssistantPage() {
       setResult(data);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("cancel")) await showError(error);
+      if (!message.includes("cancel")) showMpError(error, () => chooseAndAnalyze(sourceType));
     } finally {
       setBusyMessage("");
     }
@@ -65,11 +67,13 @@ export default function LifeAssistantPage() {
     setText("");
     setPreviewPath("");
     setResult(undefined);
+    dismissError();
   }
 
   return (
     <View className="life-page">
       <PageHeader title="生活助手" />
+      {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       <View className="life-content">
         {!mode ? (
           <View>
@@ -151,8 +155,4 @@ function readBase64(filePath: string): Promise<string> {
 function imageMime(filePath: string): "image/jpeg" | "image/png" | "image/webp" {
   const extension = filePath.split("?")[0].split(".").pop()?.toLowerCase();
   return extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
-}
-
-async function showError(error: unknown) {
-  await Taro.showToast({ title: error instanceof Error ? error.message : "操作失败，请重试", icon: "none", duration: 3000 });
 }

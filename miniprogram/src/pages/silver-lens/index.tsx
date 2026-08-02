@@ -3,6 +3,7 @@ import { Image, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
+import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type MediaSecurityStatus } from "../../services/api";
 import { ensurePrivacyAuthorized } from "../../services/privacy";
@@ -50,6 +51,7 @@ export default function SilverLensPage() {
   const [choosingStyle, setChoosingStyle] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
   const [securityStatus, setSecurityStatus] = useState<MediaSecurityStatus>();
+  const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   const busy = Boolean(busyMessage);
 
@@ -80,7 +82,7 @@ export default function SilverLensPage() {
       if (message.includes("auth") || message.includes("permission") || message.includes("authorize")) {
         await guideToSettings("需要相机或相册权限", "请在设置中允许访问相机或相册，再回来选择照片。");
       } else {
-        await Taro.showToast({ title: message || "选择照片失败，请重试", icon: "none", duration: 3000 });
+        showMpError(error, () => chooseImage(sourceType));
       }
     } finally {
       setBusyMessage("");
@@ -98,7 +100,7 @@ export default function SilverLensPage() {
       setSecurityStatus(result.securityStatus);
       setChoosingStyle(false);
     } catch (error) {
-      await Taro.showToast({ title: error instanceof Error ? error.message : "处理失败，请重试", icon: "none", duration: 3000 });
+      showMpError(error, () => processImage(mode));
     } finally {
       setBusyMessage("");
     }
@@ -122,7 +124,7 @@ export default function SilverLensPage() {
       if (message.includes("auth") || message.includes("deny") || message.includes("permission")) {
         await guideToSettings("需要保存权限", "请在设置中允许保存到相册，再回来保存照片。");
       } else {
-        await Taro.showToast({ title: message || "保存失败，请重试", icon: "none" });
+        showMpError(error, saveResult);
       }
     }
   }
@@ -133,11 +135,13 @@ export default function SilverLensPage() {
     setResultUrl("");
     setChoosingStyle(false);
     setSecurityStatus(undefined);
+    dismissError();
   }
 
   return (
     <View className={`silver-page ${resultUrl ? "silver-page--result" : ""}`}>
       <PageHeader title="老摄影大师" />
+      {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       {!previewPath ? (
         <View className="silver-entry">
           <View className="silver-entry__hero">

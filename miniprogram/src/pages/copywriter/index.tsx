@@ -3,6 +3,7 @@ import { Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
+import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import {
@@ -37,6 +38,7 @@ export default function CopywriterPage() {
   const [flow, setFlow] = useState(initialCopywriterFlow);
   const [wishes, setWishes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const { errorState, showMpError, dismissError, retryError } = useMpError();
   const question = flow.step === "customContext" ? undefined : questions[flow.step];
   const selected = useMemo(() => flow[flow.step], [flow]);
 
@@ -56,7 +58,7 @@ export default function CopywriterPage() {
       });
       setWishes(result.wishes);
     } catch (error) {
-      await Taro.showToast({ title: error instanceof Error ? error.message : "生成失败，请重试", icon: "none", duration: 3000 });
+      showMpError(error, generate);
     } finally {
       setLoading(false);
     }
@@ -70,11 +72,13 @@ export default function CopywriterPage() {
   function startAgain() {
     setWishes([]);
     setFlow((current) => resetCopywriterFlow(current));
+    dismissError();
   }
 
   return (
     <View className={`copywriter-page ${wishes.length ? "copywriter-page--result" : ""}`}>
       <PageHeader title="暖心文案" />
+      {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       {wishes.length === 0 ? (
         <View className="guide-panel">
           {flow.step === "customContext" ? (

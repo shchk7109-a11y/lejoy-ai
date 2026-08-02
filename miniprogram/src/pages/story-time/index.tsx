@@ -3,6 +3,7 @@ import { Image, Input, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
+import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
@@ -41,6 +42,7 @@ export default function StoryTimePage() {
   const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
   const [playingPage, setPlayingPage] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
+  const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   async function loadTopics() {
     if (!theme || busyMessage) return;
@@ -54,7 +56,7 @@ export default function StoryTimePage() {
       setTopics(result.topics);
       setStep("topics");
     } catch (error) {
-      await showError(error);
+      showMpError(error, loadTopics);
     } finally {
       setBusyMessage("");
     }
@@ -84,8 +86,9 @@ export default function StoryTimePage() {
             currentPage.pageNumber === page.pageNumber ? { ...currentPage, imageUrl: image.imageUrl } : currentPage
           )));
           return true;
-        } catch {
+        } catch (error) {
           setFailedImagePages((current) => current.includes(page.pageNumber) ? current : [...current, page.pageNumber]);
+          showMpError(error, () => generateStoryPageImage(page));
           return false;
         }
       }));
@@ -93,7 +96,7 @@ export default function StoryTimePage() {
         await Taro.showToast({ title: "部分配图失败，请重新生成故事", icon: "none", duration: 3000 });
       }
     } catch (error) {
-      await showError(error);
+      showMpError(error, () => generateStory(topic));
     } finally {
       setBusyMessage("");
       setIllustrating(false);
@@ -121,7 +124,7 @@ export default function StoryTimePage() {
       }
       playSequence(readyPages, 0);
     } catch (error) {
-      await showError(error);
+      showMpError(error, prepareAndPlay);
     } finally {
       setBusyMessage("");
     }
@@ -146,6 +149,18 @@ export default function StoryTimePage() {
     audio.play();
   }
 
+  async function generateStoryPageImage(page: StoryPage) {
+    try {
+      const image = await mpApi.generateStoryPageImage({ imagePrompt: page.imagePrompt, pageNumber: page.pageNumber });
+      setPages((current) => current.map((currentPage) => (
+        currentPage.pageNumber === page.pageNumber ? { ...currentPage, imageUrl: image.imageUrl } : currentPage
+      )));
+      setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== page.pageNumber));
+    } catch (error) {
+      showMpError(error, () => generateStoryPageImage(page));
+    }
+  }
+
   function restart() {
     audioRef.current?.destroy();
     setStep("theme");
@@ -156,11 +171,13 @@ export default function StoryTimePage() {
     setIllustrating(false);
     setFailedImagePages([]);
     setPlayingPage(undefined);
+    dismissError();
   }
 
   return (
     <View className="story-page">
       <PageHeader title="AI 故事会" />
+      {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       <View className="story-content">
         {step === "theme" ? (
           <View>
@@ -220,7 +237,7 @@ export default function StoryTimePage() {
                 <Text className="story-card__text">{page.text}</Text>
               </View>
             ))}
-            <Text className="story-label">选择朗读声音</Text>
+            <Text className="story-label">AI 合成语音 · 选择朗读声音</Text>
             <View className="voice-grid">
               {STORY_VOICES.map((voice) => (
                 <View key={voice.id} className={`voice-card clickable ${voiceType === voice.id ? "voice-card--selected" : ""}`} onClick={() => setVoiceType(voice.id)}>
@@ -239,8 +256,4 @@ export default function StoryTimePage() {
       {busyMessage ? <View className="story-loading"><View className="story-loading__spinner" /><Text>{busyMessage}</Text><Text className="story-loading__tip">请不要重复点击</Text></View> : null}
     </View>
   );
-}
-
-async function showError(error: unknown) {
-  await Taro.showToast({ title: error instanceof Error ? error.message : "操作失败，请重试", icon: "none", duration: 3000 });
 }

@@ -1,0 +1,71 @@
+@use "../../styles/tokens.scss" as *;
+
+.error-state {
+  margin: 30rpx $page-padding;
+  padding: 38rpx 32rpx;
+  border: 4rpx solid #f59e0b;
+  border-radius: $radius-card;
+  background: #fffbeb;
+  box-shadow: $shadow-card;
+  text-align: center;
+}
+
+.error-state--content_rejected {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.error-state--insufficient_credits {
+  border-color: $color-border;
+  background: $color-primary-soft;
+}
+
+.error-state__icon,
+.error-state__title,
+.error-state__message,
+.error-state__help {
+  display: block;
+}
+
+.error-state__icon {
+  font-size: 62rpx;
+}
+
+.error-state__title {
+  margin-top: 12rpx;
+  font-size: $font-title;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.error-state__message,
+.error-state__help {
+  margin: 18rpx 0 28rpx;
+  color: $color-secondary;
+  font-size: $font-body;
+  line-height: 1.65;
+}
+
+.error-state__help {
+  padding: 22rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  color: $color-primary-strong;
+  font-weight: 700;
+}
+
+.error-state .nut-button {
+  min-height: $button-main-height;
+  white-space: normal;
+}
+
+.error-state__dismiss {
+  min-height: $touch-min;
+  margin-top: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: $color-secondary;
+  font-size: $font-body;
+  font-weight: 700;
+}

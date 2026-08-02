@@ -3,6 +3,7 @@ import { ScrollView, Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
+import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type ChatMessage } from "../../services/api";
@@ -16,6 +17,7 @@ export default function KaleidoscopePage() {
   const [busy, setBusy] = useState(false);
   const [speakingIndex, setSpeakingIndex] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
+  const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   useEffect(() => {
     if (!Taro.getStorageSync(NOTICE_KEY)) {
@@ -40,7 +42,20 @@ export default function KaleidoscopePage() {
       const result = await mpApi.chat(message, history);
       setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
     } catch (error) {
-      await Taro.showToast({ title: error instanceof Error ? error.message : "暂时无法回答，请重试", icon: "none", duration: 3000 });
+      showMpError(error, () => retryMessage(message, history));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function retryMessage(message: string, history: ChatMessage[]) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await mpApi.chat(message, history);
+      setMessages((current) => [...current, { role: "assistant", content: result.reply }]);
+    } catch (error) {
+      showMpError(error, () => retryMessage(message, history));
     } finally {
       setBusy(false);
     }
@@ -68,13 +83,14 @@ export default function KaleidoscopePage() {
       setSpeakingIndex(index);
       audio.play();
     } catch (error) {
-      await Taro.showToast({ title: error instanceof Error ? error.message : "朗读失败，请重试", icon: "none" });
+      showMpError(error, () => speak(content, index));
     }
   }
 
   return (
     <View className="chat-page">
       <PageHeader title="AI 万花筒" />
+      {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       <View className="chat-intro">
         <Text className="chat-intro__title">生活百科，陪您聊聊</Text>
         <Text className="chat-intro__tip">可以聊节气、饮食搭配、运动睡眠和传统文化</Text>
