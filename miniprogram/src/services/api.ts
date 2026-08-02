@@ -71,9 +71,9 @@ export const mpApi = {
     request<{ url: string; fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/upload/image", { method: "POST", data }),
   uploadAudio: (data: { base64: string; mimeType: "audio/mpeg" }) =>
     request<{ url: string; fileKey: string }>("/api/mp/upload/audio", { method: "POST", data }),
-  restorePhoto: (data: { imageUrl: string; prompt?: string }) =>
+  restorePhoto: (data: { sourceFileKey: string; prompt?: string }) =>
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data }),
-  transformPhoto: (data: { imageUrl: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }) =>
+  transformPhoto: (data: { sourceFileKey: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }) =>
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data }),
   transcribeAudio: (audioUrl: string) =>
     request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { audioUrl, language: "zh" } }),

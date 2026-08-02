@@ -43,6 +43,7 @@ async function guideToSettings(title: string, content: string): Promise<void> {
 export default function SilverLensPage() {
   const [previewPath, setPreviewPath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [sourceFileKey, setSourceFileKey] = useState("");
   const [resultUrl, setResultUrl] = useState("");
   const [selectedStyle, setSelectedStyle] = useState<ArtStyle>("油画");
   const [choosingStyle, setChoosingStyle] = useState(false);
@@ -68,6 +69,7 @@ export default function SilverLensPage() {
       const uploaded = await mpApi.uploadImage({ base64, mimeType: imageMime(file.tempFilePath) });
       setPreviewPath(file.tempFilePath);
       setSourceUrl(uploaded.url);
+      setSourceFileKey(uploaded.fileKey);
       setResultUrl("");
       setSecurityStatus(uploaded.securityStatus);
     } catch (error) {
@@ -84,12 +86,12 @@ export default function SilverLensPage() {
   }
 
   async function processImage(mode: "restore" | "transform") {
-    if (!sourceUrl || busy) return;
+    if (!sourceUrl || !sourceFileKey || busy) return;
     setBusyMessage(mode === "restore" ? "正在修复，约需半分钟" : "正在创作艺术照，约需半分钟");
     try {
       const result = mode === "restore"
-        ? await mpApi.restorePhoto({ imageUrl: sourceUrl })
-        : await mpApi.transformPhoto({ imageUrl: sourceUrl, style: selectedStyle });
+        ? await mpApi.restorePhoto({ sourceFileKey })
+        : await mpApi.transformPhoto({ sourceFileKey, style: selectedStyle });
       setResultUrl(result.imageUrl);
       setSecurityStatus(result.securityStatus);
       setChoosingStyle(false);

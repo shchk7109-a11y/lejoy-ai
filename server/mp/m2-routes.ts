@@ -5,8 +5,8 @@ import { aiASR, aiEditImage } from "../ai/gateway";
 import { ENV } from "../_core/env";
 import { withCreditCharge } from "../credits-charge";
 import { ART_STYLES, buildRestorePrompt, getArtStylePrompt, type ArtStyle } from "../silverlens";
-import { storageDelete, storagePut } from "../storage";
-import { createMediaCheckTask, findMediaCheckTask, updateMediaCheckTaskStatus } from "./media-check-tasks";
+import { storageDelete, storageGet, storagePut } from "../storage";
+import { createMediaCheckTask, findMediaCheckTask, findMediaCheckTaskByFile, updateMediaCheckTaskStatus } from "./media-check-tasks";
 import { checkMediaSecurity, type MediaSecuritySubmission } from "./security";
 import type { MpAuthenticatedRequest } from "./auth";
 import { resolveWechatMediaStatus, verifyWechatSignature, type MediaCheckStatus } from "./wechat-callback";
@@ -24,10 +24,12 @@ export type M2Dependencies = {
   contentSecurityMode: string;
   callbackToken: string;
   storagePut: typeof storagePut;
+  storageGet: typeof storageGet;
   storageDelete: typeof storageDelete;
   submitMediaCheck: (url: string, openId?: string) => Promise<MediaSecuritySubmission>;
   createMediaCheckTask: (task: InsertMediaCheckTask) => Promise<void>;
   findMediaCheckTask: (traceId: string) => Promise<MediaCheckTask | undefined>;
+  findMediaCheckTaskByFile: (userId: number, fileKey: string) => Promise<MediaCheckTask | undefined>;
   updateMediaCheckTaskStatus: (traceId: string, status: MediaCheckStatus) => Promise<void>;
   aiEditImage: typeof aiEditImage;
   aiASR: typeof aiASR;
@@ -40,10 +42,12 @@ export function defaultM2Dependencies(): M2Dependencies {
     contentSecurityMode: ENV.contentSecurity,
     callbackToken: ENV.wechatMpCallbackToken,
     storagePut,
+    storageGet,
     storageDelete,
     submitMediaCheck: checkMediaSecurity,
     createMediaCheckTask,
     findMediaCheckTask,
+    findMediaCheckTaskByFile,
     updateMediaCheckTaskStatus,
     aiEditImage,
     aiASR,
@@ -81,6 +85,12 @@ function decodeImage(body: unknown): { buffer: Buffer; mimeType: keyof typeof IM
   const buffer = Buffer.from(encoded, "base64");
   if (!buffer.length) throw new Error("图片内容不能为空");
   if (buffer.length > MAX_IMAGE_BYTES) throw new Error("图片不能超过 10MB");
+  const signatureMatches = mimeType === "image/jpeg"
+    ? buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+    : mimeType === "image/png"
+      ? buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      : buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+  if (!signatureMatches) throw new Error("图片内容与 MIME 类型不匹配");
   return { buffer, mimeType };
 }
 
@@ -99,9 +109,9 @@ function decodeAudio(body: unknown): { buffer: Buffer; mimeType: "audio/mpeg" } 
   return { buffer, mimeType: "audio/mpeg" };
 }
 
-function imageUrl(body: unknown): string | undefined {
+function sourceFileKey(body: unknown): string | undefined {
   if (!body || typeof body !== "object") return undefined;
-  const value = (body as { imageUrl?: unknown }).imageUrl;
+  const value = (body as { sourceFileKey?: unknown }).sourceFileKey;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
@@ -110,15 +120,34 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
 
   const submitStoredImage = async (file: StoredFile, user: { id: number; openId: string }) => {
     if (deps.contentSecurityMode !== "wechat") return "bypassed" as const;
-    const submission = await deps.submitMediaCheck(file.url, user.openId);
-    if (submission.status !== "pending") return submission.status;
-    await deps.createMediaCheckTask({
-      traceId: submission.traceId,
-      userId: user.id,
-      fileKey: file.key,
-      status: "pending",
-    });
-    return submission.status;
+    try {
+      const submission = await deps.submitMediaCheck(file.url, user.openId);
+      if (submission.status !== "pending") return submission.status;
+      await deps.createMediaCheckTask({
+        traceId: submission.traceId,
+        userId: user.id,
+        fileKey: file.key,
+        status: "pending",
+      });
+      return submission.status;
+    } catch (error) {
+      try {
+        await deps.storageDelete(file.key);
+      } catch (deleteError) {
+        console.error("[MP M2 media compensation]", deleteError);
+      }
+      throw error;
+    }
+  };
+
+  const resolveSourceImage = async (body: unknown, user: { id: number }) => {
+    const fileKey = sourceFileKey(body);
+    if (!fileKey || !fileKey.startsWith(`uploads/${user.id}/`)) return undefined;
+    if (deps.contentSecurityMode === "wechat") {
+      const task = await deps.findMediaCheckTaskByFile(user.id, fileKey);
+      if (!task || task.status === "risky") return undefined;
+    }
+    return deps.storageGet(fileKey);
   };
 
   router.get("/security/wechat-callback", (req, res) => {
@@ -161,10 +190,16 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
       return;
     }
     const task = await deps.findMediaCheckTask(traceId);
-    if (task) {
-      if (status === "risky") await deps.storageDelete(task.fileKey);
-      await deps.updateMediaCheckTaskStatus(traceId, status);
+    if (!task) {
+      res.status(503).type("text/plain").send("task not ready");
+      return;
     }
+    if (task.status === "pass" || task.status === "risky") {
+      res.type("text/plain").send("success");
+      return;
+    }
+    if (status === "risky") await deps.storageDelete(task.fileKey);
+    await deps.updateMediaCheckTaskStatus(traceId, status);
     res.type("text/plain").send("success");
   }));
 
@@ -203,19 +238,19 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   }));
 
   router.post("/silverlens/restore", asyncRoute(async (req, res) => {
-    const sourceUrl = imageUrl(req.body);
-    if (!sourceUrl) {
-      badRequest(res, "imageUrl 不能为空");
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const source = await resolveSourceImage(req.body, user);
+    if (!source) {
+      badRequest(res, "请选择当前账号已上传且通过安全登记的图片");
       return;
     }
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt : undefined;
-    const user = (req as MpAuthenticatedRequest).mpUser;
     const charged = await deps.withCreditCharge(
       user.id,
       2,
       "photo_restore",
       async () => {
-        const base64 = await deps.aiEditImage({ imageUrl: sourceUrl, prompt: buildRestorePrompt(prompt) });
+        const base64 = await deps.aiEditImage({ imageUrl: source.url, prompt: buildRestorePrompt(prompt) });
         const file = await deps.storagePut(`results/${user.id}/${deps.createFileId()}.png`, Buffer.from(base64, "base64"), "image/png");
         const securityStatus = await submitStoredImage(file, user);
         return { file, securityStatus };
@@ -226,20 +261,24 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   }));
 
   router.post("/silverlens/transform", asyncRoute(async (req, res) => {
-    const sourceUrl = imageUrl(req.body);
     const style = req.body?.style;
-    if (!sourceUrl || typeof style !== "string" || !(style in ART_STYLES)) {
+    if (typeof style !== "string" || !(style in ART_STYLES)) {
       badRequest(res, "请选择有效的艺术风格");
       return;
     }
     const artStyle = style as ArtStyle;
     const user = (req as MpAuthenticatedRequest).mpUser;
+    const source = await resolveSourceImage(req.body, user);
+    if (!source) {
+      badRequest(res, "请选择当前账号已上传且通过安全登记的图片");
+      return;
+    }
     const charged = await deps.withCreditCharge(
       user.id,
       2,
       "art_transform",
       async () => {
-        const base64 = await deps.aiEditImage({ imageUrl: sourceUrl, prompt: getArtStylePrompt(artStyle) });
+        const base64 = await deps.aiEditImage({ imageUrl: source.url, prompt: getArtStylePrompt(artStyle) });
         const file = await deps.storagePut(`results/${user.id}/${deps.createFileId()}.png`, Buffer.from(base64, "base64"), "image/png");
         const securityStatus = await submitStoredImage(file, user);
         return { file, securityStatus };

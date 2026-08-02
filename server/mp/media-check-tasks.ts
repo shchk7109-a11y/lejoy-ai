@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { mediaCheckTasks, type InsertMediaCheckTask, type MediaCheckTask } from "../../drizzle/schema";
 import { getDb } from "../db";
 import type { MediaCheckStatus } from "./wechat-callback";
@@ -13,6 +13,15 @@ export async function findMediaCheckTask(traceId: string): Promise<MediaCheckTas
   const db = await getDb();
   if (!db) throw new Error("数据库不可用");
   const rows = await db.select().from(mediaCheckTasks).where(eq(mediaCheckTasks.traceId, traceId)).limit(1);
+  return rows[0];
+}
+
+export async function findMediaCheckTaskByFile(userId: number, fileKey: string): Promise<MediaCheckTask | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("数据库不可用");
+  const rows = await db.select().from(mediaCheckTasks)
+    .where(and(eq(mediaCheckTasks.userId, userId), eq(mediaCheckTasks.fileKey, fileKey)))
+    .limit(1);
   return rows[0];
 }
 

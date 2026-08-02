@@ -24,6 +24,7 @@ function dependencies(overrides: Partial<M2Dependencies> = {}): M2Dependencies {
     contentSecurityMode: "wechat",
     callbackToken: "callback-token",
     storagePut: vi.fn(async (key) => ({ key, url: `https://cdn.example/${key}` })),
+    storageGet: vi.fn(async (key) => ({ key, url: `https://cdn.example/${key}` })),
     storageDelete: vi.fn(async () => undefined),
     submitMediaCheck: vi.fn(async () => ({ status: "pending", traceId: "trace-1" })),
     createMediaCheckTask: vi.fn(async () => undefined),
@@ -32,6 +33,14 @@ function dependencies(overrides: Partial<M2Dependencies> = {}): M2Dependencies {
       traceId: "trace-1",
       userId: 7,
       fileKey: "uploads/7/a.jpg",
+      status: "pending",
+      createdAt: new Date(),
+    })),
+    findMediaCheckTaskByFile: vi.fn(async (userId, fileKey) => ({
+      id: 2,
+      traceId: "trace-source",
+      userId,
+      fileKey,
       status: "pending",
       createdAt: new Date(),
     })),
@@ -79,7 +88,7 @@ describe("M2 小程序 REST 接口", () => {
   it("上传白名单图片、落存储并记录 pending 媒体任务", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);
-    const base64 = Buffer.from("jpeg-content").toString("base64");
+    const base64 = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00]).toString("base64");
 
     const response = await fetch(`${baseUrl}/upload/image`, {
       method: "POST",
@@ -130,13 +139,41 @@ describe("M2 小程序 REST 接口", () => {
     const response = await fetch(`${baseUrl}/upload/image`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ base64: "aGVsbG8=", mimeType: "image/webp" }),
+      body: JSON.stringify({ base64: Buffer.from("RIFF\u0000\u0000\u0000\u0000WEBP", "binary").toString("base64"), mimeType: "image/webp" }),
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ securityStatus: "bypassed" });
     expect(deps.submitMediaCheck).not.toHaveBeenCalled();
     expect(deps.createMediaCheckTask).not.toHaveBeenCalled();
+  });
+
+  it("拒绝声明为图片但魔数不匹配的伪造内容", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+
+    const response = await fetch(`${baseUrl}/upload/image`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ base64: Buffer.from("not-a-real-image").toString("base64"), mimeType: "image/png" }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(deps.storagePut).not.toHaveBeenCalled();
+  });
+
+  it("媒体任务落库失败时补偿删除已经上传的文件", async () => {
+    const deps = dependencies({ createMediaCheckTask: vi.fn(async () => { throw new Error("database unavailable"); }) });
+    const baseUrl = await startApp(deps);
+
+    const response = await fetch(`${baseUrl}/upload/image`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ base64: Buffer.from([0xff, 0xd8, 0xff, 0xe0]).toString("base64"), mimeType: "image/jpeg" }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(deps.storageDelete).toHaveBeenCalledWith("uploads/7/fixed-id.jpg");
   });
 
   it("照片修复先扣 2 积分、使用共享提示词并送检生成图", async () => {
@@ -146,16 +183,44 @@ describe("M2 小程序 REST 接口", () => {
     const response = await fetch(`${baseUrl}/silverlens/restore`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ imageUrl: "https://cdn.example/source.jpg" }),
+      body: JSON.stringify({ sourceFileKey: "uploads/7/source.jpg" }),
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ credits: 98, securityStatus: "pending" });
     expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 2, "photo_restore", expect.any(Function), "照片修复");
     expect(deps.aiEditImage).toHaveBeenCalledWith(expect.objectContaining({
-      imageUrl: "https://cdn.example/source.jpg",
+      imageUrl: "https://cdn.example/uploads/7/source.jpg",
       prompt: expect.stringContaining("人物面部保持原有特征不变"),
     }));
+  });
+
+  it("修图拒绝外部 URL、其他账号文件及未登记来源", async () => {
+    const deps = dependencies({ findMediaCheckTaskByFile: vi.fn(async () => undefined) });
+    const baseUrl = await startApp(deps);
+
+    const external = await fetch(`${baseUrl}/silverlens/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ imageUrl: "https://attacker.example/unreviewed.jpg" }),
+    });
+    expect(external.status).toBe(400);
+
+    const otherUser = await fetch(`${baseUrl}/silverlens/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceFileKey: "uploads/8/source.jpg" }),
+    });
+    expect(otherUser.status).toBe(400);
+
+    const unregistered = await fetch(`${baseUrl}/silverlens/restore`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceFileKey: "uploads/7/not-registered.jpg" }),
+    });
+    expect(unregistered.status).toBe(400);
+    expect(deps.storageGet).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
   it("艺术转换只接受五种风格，语音转写不扣积分", async () => {
@@ -234,5 +299,22 @@ describe("M2 小程序 REST 接口", () => {
     expect(pass.status).toBe(200);
     expect(deps.storageDelete).not.toHaveBeenCalled();
     expect(deps.updateMediaCheckTaskStatus).toHaveBeenCalledWith("trace-1", "pass");
+  });
+
+  it("回调早于任务落库时返回非 2xx 促使微信重试", async () => {
+    const deps = dependencies({ findMediaCheckTask: vi.fn(async () => undefined) });
+    const baseUrl = await startApp(deps);
+    const timestamp = "1722528000";
+    const nonce = "nonce-race";
+
+    const response = await fetch(`${baseUrl}/security/wechat-callback?timestamp=${timestamp}&nonce=${nonce}&signature=${signature(timestamp, nonce)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trace_id: "trace-not-ready", result: { suggest: "risky" } }),
+    });
+
+    expect(response.status).toBe(503);
+    expect(deps.storageDelete).not.toHaveBeenCalled();
+    expect(deps.updateMediaCheckTaskStatus).not.toHaveBeenCalled();
   });
 });
