@@ -107,6 +107,16 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     }
   };
 
+  const resolveOwnedImage = async (fileKey: string, user: { id: number }) => {
+    const ownedImagePattern = new RegExp(`^uploads/${user.id}/[A-Za-z0-9][A-Za-z0-9._-]*\\.(?:jpe?g|png|webp)$`, "i");
+    if (!ownedImagePattern.test(fileKey)) return undefined;
+    if (deps.contentSecurityMode === "wechat") {
+      const task = await deps.findMediaCheckTaskByFile(user.id, fileKey);
+      if (!task || task.status === "risky") return undefined;
+    }
+    return deps.storageGet(fileKey);
+  };
+
   router.post("/story/suggest-topics", asyncRoute(async (req, res) => {
     const theme = nonEmpty(req.body?.theme);
     const childName = nonEmpty(req.body?.childName);
@@ -199,6 +209,94 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
     const charged = await deps.withCreditCharge(user.id, 2, "story_speech", generateSpeech, "AI故事语音生成");
+    res.json({ ...charged.value, credits: charged.credits });
+  }));
+
+  router.post("/life/recipe", asyncRoute(async (req, res) => {
+    const foodName = nonEmpty(req.body?.foodName);
+    if (!foodName || foodName.length > 80) {
+      badRequest(res, "请输入 80 字以内的菜名");
+      return;
+    }
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const charged = await deps.withCreditCharge(
+      user.id,
+      1,
+      "life_recipe",
+      async () => {
+        const [nutrition, imageDataUrl] = await Promise.all([
+          deps.analyzeFoodNutrition(foodName),
+          deps.generateFoodImage(foodName),
+        ]);
+        const imageMatch = imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+        if (!imageMatch) throw new Error("菜品图片格式无效");
+        const mimeType = imageMatch[1];
+        const extension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+        const file = await deps.storagePut(
+          `life-food/${user.id}/${deps.createFileId()}.${extension}`,
+          Buffer.from(imageMatch[2], "base64"),
+          mimeType,
+        );
+        const securityStatus = await submitStoredImage(file, user);
+        return {
+          title: nutrition.name,
+          description: nutrition.summary,
+          tags: nutrition.tags,
+          healthyScore: nutrition.healthScore,
+          nutrition: {
+            calories: nutrition.calories,
+            protein: nutrition.protein,
+            fat: nutrition.fat,
+            carbs: nutrition.carbs,
+            sodium: nutrition.sodium,
+            sugar: nutrition.sugar,
+          },
+          details: nutrition.ingredients,
+          advice: nutrition.advice,
+          imageUrl: file.url,
+          fileKey: file.key,
+          securityStatus,
+        };
+      },
+      "生活助手：查菜谱",
+    );
+    res.json({ ...charged.value, credits: charged.credits });
+  }));
+
+  router.post("/life/identify", asyncRoute(async (req, res) => {
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const fileKey = nonEmpty(req.body?.sourceFileKey);
+    const source = await resolveOwnedImage(fileKey, user);
+    if (!source) {
+      badRequest(res, "请选择当前账号已上传且通过安全登记的植物图片");
+      return;
+    }
+    const charged = await deps.withCreditCharge(
+      user.id,
+      1,
+      "life_identify",
+      () => deps.identifyPlant({ imageUrl: source.url }),
+      "生活助手：识花草",
+    );
+    res.json({ ...charged.value, credits: charged.credits });
+  }));
+
+  router.post("/life/health", asyncRoute(async (req, res) => {
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const textHint = nonEmpty(req.body?.textHint) || undefined;
+    const fileKey = nonEmpty(req.body?.sourceFileKey);
+    const source = fileKey ? await resolveOwnedImage(fileKey, user) : undefined;
+    if ((!textHint && !fileKey) || (fileKey && !source)) {
+      badRequest(res, fileKey ? "请选择当前账号已上传且通过安全登记的图片" : "请输入想了解的生活健康常识或选择图片");
+      return;
+    }
+    const charged = await deps.withCreditCharge(
+      user.id,
+      1,
+      "life_health",
+      () => deps.queryHealthInfo({ textHint, imageUrl: source?.url }),
+      "生活助手：健康百科",
+    );
     res.json({ ...charged.value, credits: charged.credits });
   }));
 
