@@ -13,6 +13,7 @@ import { ENV } from "../_core/env";
 import { createMpAuthMiddleware, exchangeWechatCode, signMpToken, type MpAuthenticatedRequest } from "./auth";
 import { MP_MODULES } from "./modules";
 import { checkTextSecurity, type SecurityCheckResult } from "./security";
+import { createTextSecurityBatches } from "./text-security-batches";
 
 type Transaction = Awaited<ReturnType<typeof getUserTransactions>>[number];
 
@@ -143,8 +144,8 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
         "wish_generate",
         async () => {
           const generated = await deps.generateWishes(parsed.data);
-          for (const wish of generated) {
-            const outputCheck = await deps.checkTextSecurity(wish, user.openId);
+          for (const batch of createTextSecurityBatches(generated)) {
+            const outputCheck = await deps.checkTextSecurity(batch, user.openId);
             if (!outputCheck.safe) {
               throw new ContentRejectedError(outputCheck.reason ?? "生成内容未通过安全检查");
             }

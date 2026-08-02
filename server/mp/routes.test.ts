@@ -215,9 +215,13 @@ describe("小程序 REST 适配层", () => {
       relationship: "长辈",
       tone: "温暖亲切",
     });
-    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(4);
+    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(2);
     expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(1, expect.stringContaining("生日寿辰"), "mp_mock_user");
-    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, "愿您平安喜乐。", "mp_mock_user");
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(
+      2,
+      "愿您平安喜乐。\n愿温暖常伴左右。\n祝福日日常新。",
+      "mp_mock_user",
+    );
     expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 1, "wish_generate", expect.any(Function), "暖心文案");
   });
 
@@ -256,8 +260,8 @@ describe("小程序 REST 适配层", () => {
 
   it("任一输出内容安全拒绝时不扣积分", async () => {
     const checkTextSecurity = vi.fn(async (text: string) => ({
-      safe: text !== "愿温暖常伴左右。",
-      ...(text === "愿温暖常伴左右。" ? { reason: "输出不合规" } : {}),
+      safe: !text.includes("愿温暖常伴左右。"),
+      ...(text.includes("愿温暖常伴左右。") ? { reason: "输出不合规" } : {}),
     }));
     const deps = createDependencies({ checkTextSecurity });
     const { baseUrl } = await startApp(deps);
