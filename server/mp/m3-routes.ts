@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router, type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import type { InsertMediaCheckTask, MediaCheckTask } from "../../drizzle/schema";
 import { aiChatMulti, aiGenerateImage, aiTTS } from "../ai/gateway";
+import { ENV } from "../_core/env";
 import { withCreditCharge } from "../credits-charge";
 import { getUserById } from "../db";
 import {
@@ -48,7 +49,7 @@ export type M3Dependencies = {
 
 export function defaultM3Dependencies(): M3Dependencies {
   return {
-    contentSecurityMode: process.env.CONTENT_SECURITY ?? "off",
+    contentSecurityMode: ENV.contentSecurity,
     storagePut,
     storageGet,
     storageDelete,

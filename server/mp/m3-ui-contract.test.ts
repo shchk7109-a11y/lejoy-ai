@@ -57,5 +57,6 @@ describe("M3 小程序页面契约", () => {
     expect(page).toContain("读给我听");
     expect(page).toContain("AigcBadge");
     expect(styles).toMatch(/chat-bubble[\s\S]*font-size:\s*(?:3[6-9]|[4-9]\d)rpx/);
+    expect(styles).toMatch(/chat-list\s*\{[^}]*height:\s*600rpx/);
   });
 });

@@ -54,7 +54,7 @@ export default function HomePage() {
       <View className="home-nav">
         <View className="account-pill">
           <View className="account-pill__credits clickable" onClick={() => Taro.navigateTo({ url: "/pages/profile/index" })}>
-            <Text className="account-pill__coin">🪙</Text>
+            <View className="account-pill__coin"><Text>¥</Text></View>
             <Text className="account-pill__number">{user?.credits ?? "--"}</Text>
           </View>
           <View className="account-pill__divider" />

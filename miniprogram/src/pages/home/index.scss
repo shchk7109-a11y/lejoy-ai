@@ -33,7 +33,22 @@
 }
 
 .account-pill__coin {
-  font-size: 36rpx;
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3rpx solid #d97706;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #fde68a, #fbbf24);
+  box-shadow: inset 0 0 0 3rpx rgba(255, 255, 255, 0.35);
+  color: #78350f;
+}
+
+.account-pill__coin text {
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .account-pill__number {

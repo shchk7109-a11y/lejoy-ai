@@ -4,7 +4,7 @@
 .chat-intro { margin: 28rpx $page-padding 18rpx; padding: 28rpx; border: 3rpx solid #fbcfe8; border-radius: $radius-card; background: #fce7f3; }
 .chat-intro__title { display: block; color: #9d174d; font-size: $font-title; font-weight: 800; }
 .chat-intro__tip { display: block; margin-top: 10rpx; color: #7a3654; font-size: $font-secondary; line-height: 1.5; }
-.chat-list { height: 720rpx; padding: 18rpx $page-padding; }
+.chat-list { height: 600rpx; padding: 18rpx $page-padding; }
 .chat-empty { padding: 32rpx; border-radius: $radius-card; background: #fff; color: #7a3654; font-size: $font-body; line-height: 1.6; }
 .chat-row { margin-bottom: 24rpx; display: flex; }
 .chat-row--user { justify-content: flex-end; }
