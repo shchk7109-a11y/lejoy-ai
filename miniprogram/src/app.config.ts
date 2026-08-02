@@ -1,6 +1,6 @@
 export default defineAppConfig({
-  // Taro 4.2.1 的类型仍只列位置类接口，微信提审实际还要求声明以下隐私接口。
-  requiredPrivateInfos: ["chooseMedia", "saveImageToPhotosAlbum", "getRecorderManager"] as never[],
+  // 该字段只接受位置类 API；本项目不用位置能力，保留空清单供提审核对。
+  requiredPrivateInfos: [],
   permission: {
     "scope.camera": { desc: "用于拍摄需要修复或识别的照片" },
     "scope.writePhotosAlbum": { desc: "用于把处理后的照片保存到您的相册" },

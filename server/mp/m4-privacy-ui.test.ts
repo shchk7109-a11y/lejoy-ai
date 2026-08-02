@@ -6,11 +6,10 @@ function source(relativePath: string): string {
 }
 
 describe("M4 小程序隐私授权", () => {
-  it("声明相机、相册和麦克风用途，并登记对应隐私接口", () => {
+  it("声明相机、相册和麦克风用途，不把非位置 API 误填入 requiredPrivateInfos", () => {
     const appConfig = source("app.config.ts");
-    for (const privateInfo of ["chooseMedia", "saveImageToPhotosAlbum", "getRecorderManager"]) {
-      expect(appConfig).toContain(`"${privateInfo}"`);
-    }
+    expect(appConfig).toContain("requiredPrivateInfos: []");
+    expect(appConfig).not.toMatch(/requiredPrivateInfos:\s*\[[^\]]*(chooseMedia|saveImageToPhotosAlbum|getRecorderManager)/s);
     expect(appConfig).toContain('"scope.camera": { desc: "用于拍摄需要修复或识别的照片" }');
     expect(appConfig).toContain('"scope.writePhotosAlbum": { desc: "用于把处理后的照片保存到您的相册" }');
     expect(appConfig).toContain('"scope.record": { desc: "用于把您说的话转换成文字" }');
