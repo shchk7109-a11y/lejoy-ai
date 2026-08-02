@@ -6,8 +6,8 @@
   left: 0;
   right: 0;
   z-index: 20;
-  height: 128rpx;
-  padding: 32rpx $page-padding 0;
+  height: calc(108rpx + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 24rpx 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -17,7 +17,7 @@
 
 .page-header__back,
 .page-header__side {
-  width: 160rpx;
+  width: 190rpx;
   min-height: $touch-min;
   display: flex;
   align-items: center;
@@ -38,5 +38,5 @@
 }
 
 .page-header__spacer {
-  height: 128rpx;
+  height: calc(108rpx + env(safe-area-inset-top));
 }
