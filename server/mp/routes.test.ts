@@ -181,6 +181,8 @@ describe("小程序 REST 适配层", () => {
       tone: "温暖亲切",
     });
     expect(deps.checkTextSecurity).toHaveBeenCalledTimes(4);
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(1, expect.stringContaining("生日寿辰"), "mp_mock_user");
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, "愿您平安喜乐。", "mp_mock_user");
     expect(deps.consumeCredits).toHaveBeenCalledWith(7, 1, "wish_generate", "暖心文案");
   });
 

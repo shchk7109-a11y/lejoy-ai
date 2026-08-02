@@ -30,13 +30,14 @@ export function createSecurityHooks(options: SecurityHooksOptions) {
     return cachedToken.value;
   }
 
-  async function checkTextSecurity(text: string): Promise<SecurityCheckResult> {
+  async function checkTextSecurity(text: string, openId?: string): Promise<SecurityCheckResult> {
     if (options.mode !== "wechat") return { safe: true };
+    if (!openId) throw new Error("微信文本安全检查需要用户 openid");
     const token = await getAccessToken();
     const response = await request(`https://api.weixin.qq.com/wxa/msg_sec_check?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ content: text, version: 2, scene: 2, openid: openId }),
     });
     if (!response.ok) throw new Error(`微信文本安全请求失败：HTTP ${response.status}`);
     const data = await response.json() as SecurityResponse;
@@ -46,13 +47,14 @@ export function createSecurityHooks(options: SecurityHooksOptions) {
       : { safe: true };
   }
 
-  async function checkMediaSecurity(url: string): Promise<SecurityCheckResult> {
+  async function checkMediaSecurity(url: string, openId?: string): Promise<SecurityCheckResult> {
     if (options.mode !== "wechat") return { safe: true };
+    if (!openId) throw new Error("微信媒体安全检查需要用户 openid");
     const token = await getAccessToken();
     const response = await request(`https://api.weixin.qq.com/wxa/media_check_async?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ media_url: url, media_type: 2 }),
+      body: JSON.stringify({ media_url: url, media_type: 2, version: 2, scene: 2, openid: openId }),
     });
     if (!response.ok) throw new Error(`微信媒体安全请求失败：HTTP ${response.status}`);
     const data = await response.json() as SecurityResponse;

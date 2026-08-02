@@ -28,7 +28,7 @@ export type MpDependencies = {
   getUserTransactions: (userId: number) => Promise<Transaction[]>;
   consumeCredits: (userId: number, amount: number, feature: string, description: string) => Promise<number>;
   generateWishes: (input: CopywriterInput) => Promise<string[]>;
-  checkTextSecurity: (text: string) => Promise<SecurityCheckResult>;
+  checkTextSecurity: (text: string, openId?: string) => Promise<SecurityCheckResult>;
 };
 
 function defaultDependencies(): MpDependencies {
@@ -116,14 +116,14 @@ export function createMpRouter(deps: MpDependencies = defaultDependencies()): Ro
       return;
     }
 
-    const inputCheck = await deps.checkTextSecurity(securityInput(parsed.data));
+    const inputCheck = await deps.checkTextSecurity(securityInput(parsed.data), user.openId);
     if (!inputCheck.safe) {
       res.status(422).json({ error: { code: "CONTENT_REJECTED", message: inputCheck.reason ?? "输入内容未通过安全检查" } });
       return;
     }
     const wishes = await deps.generateWishes(parsed.data);
     for (const wish of wishes) {
-      const outputCheck = await deps.checkTextSecurity(wish);
+      const outputCheck = await deps.checkTextSecurity(wish, user.openId);
       if (!outputCheck.safe) {
         res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "生成内容未通过安全检查" } });
         return;

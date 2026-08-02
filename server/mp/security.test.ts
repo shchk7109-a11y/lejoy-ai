@@ -20,12 +20,18 @@ describe("微信内容安全钩子", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, errmsg: "ok", result: { suggest: "risky" } }), { status: 200 }));
     const hooks = createSecurityHooks({ mode: "wechat", appId: "wx-appid", secret: "secret", request });
 
-    await expect(hooks.checkTextSecurity("安全内容")).resolves.toEqual({ safe: true });
-    await expect(hooks.checkTextSecurity("风险内容")).resolves.toEqual({ safe: false, reason: "微信内容安全检查未通过" });
+    await expect(hooks.checkTextSecurity("安全内容", "user-openid")).resolves.toEqual({ safe: true });
+    await expect(hooks.checkTextSecurity("风险内容", "user-openid")).resolves.toEqual({ safe: false, reason: "微信内容安全检查未通过" });
 
     expect(request).toHaveBeenCalledTimes(3);
     expect(String(request.mock.calls[1][0])).toContain("msg_sec_check?access_token=access-1");
     expect(String(request.mock.calls[2][0])).toContain("msg_sec_check?access_token=access-1");
+    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toEqual({
+      content: "安全内容",
+      version: 2,
+      scene: 2,
+      openid: "user-openid",
+    });
   });
 
   it("wechat 模式通过 media_check_async 提交媒体 URL", async () => {
@@ -34,9 +40,15 @@ describe("微信内容安全钩子", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ errcode: 0, errmsg: "ok", trace_id: "trace-1" }), { status: 200 }));
     const hooks = createSecurityHooks({ mode: "wechat", appId: "wx-appid", secret: "secret", request });
 
-    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg")).resolves.toEqual({ safe: true });
+    await expect(hooks.checkMediaSecurity("https://example.com/a.jpg", "user-openid")).resolves.toEqual({ safe: true });
 
     expect(String(request.mock.calls[1][0])).toContain("media_check_async?access_token=access-2");
-    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toMatchObject({ media_url: "https://example.com/a.jpg", media_type: 2 });
+    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toEqual({
+      media_url: "https://example.com/a.jpg",
+      media_type: 2,
+      version: 2,
+      scene: 2,
+      openid: "user-openid",
+    });
   });
 });
