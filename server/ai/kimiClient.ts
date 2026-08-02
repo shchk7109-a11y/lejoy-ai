@@ -43,8 +43,8 @@ export async function kimiChat(params: {
     model,
     messages: buildKimiMessages(params.messages),
     max_tokens: params.maxTokens ?? 4096,
-    temperature: params.temperature ?? 0.6,
   };
+  if (params.temperature !== undefined) body.temperature = params.temperature;
   // 注意：Kimi 的 JSON 模式要求提示词中出现 "json" 字样，调用方的提示词需自带
   if (params.json) body.response_format = { type: "json_object" };
 

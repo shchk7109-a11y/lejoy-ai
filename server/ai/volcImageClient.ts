@@ -41,8 +41,6 @@ export async function volcGenerateImage(params: {
     response_format: "b64_json",
     size: params.size ?? mapAspectToSize(params.aspectRatio),
     watermark: ENV.arkImageWatermark,
-    // 单图输出，关闭组图模式
-    sequential_image_generation: "disabled",
     stream: false,
   };
   if (params.imageUrls && params.imageUrls.length > 0) {
