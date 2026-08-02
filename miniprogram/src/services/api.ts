@@ -18,6 +18,7 @@ export type MpModule = {
   description: string;
   creditCost: number;
   enabled: boolean;
+  theme?: { bg: string; border: string; title: string };
 };
 
 export type CreditTransaction = {

@@ -1,106 +1,150 @@
 @use "../../styles/tokens.scss" as *;
 
-.home-page__content {
-  padding: $page-padding;
+.home-page {
+  min-height: 100vh;
+  background: #faf9f5;
 }
 
-.welcome-card {
-  min-height: 220rpx;
-  padding: 36rpx;
+.home-nav {
+  position: relative;
+  height: calc(112rpx + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
+}
+
+.account-pill {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12rpx);
+  right: 188rpx;
+  min-height: 80rpx;
+  padding: 0 24rpx;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-radius: $radius-card;
-  background: linear-gradient(135deg, #b45309, #c2410c);
-  color: #ffffff;
-  box-shadow: $shadow-card;
+  border: 2rpx solid #e7e5e4;
+  border-radius: 999rpx;
+  background: #ffffff;
+  box-shadow: 0 6rpx 18rpx rgba(41, 37, 36, 0.08);
 }
 
-.welcome-card__eyebrow,
-.welcome-card__name {
-  display: block;
-  color: #ffffff;
+.account-pill__credits {
+  min-height: 80rpx;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
-.welcome-card__eyebrow {
-  font-size: $font-secondary;
-  margin-bottom: 14rpx;
+.account-pill__coin {
+  font-size: 36rpx;
 }
 
-.welcome-card__name {
-  max-width: 390rpx;
-  font-size: $font-title;
+.account-pill__number {
+  font-size: 40rpx;
   font-weight: 800;
+  color: #292524;
 }
 
-.credits-pill {
-  min-width: 150rpx;
-  padding: 16rpx 22rpx;
+.account-pill__divider {
+  width: 2rpx;
+  height: 40rpx;
+  margin: 0 18rpx;
+  background: #d6d3d1;
+}
+
+.account-pill__logout {
+  min-height: 80rpx;
+  display: flex;
+  align-items: center;
+  color: #dc2626;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.home-page__content {
+  padding: 20rpx 32rpx 56rpx;
+}
+
+.brand-block {
+  padding: 24rpx 0 72rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.brand-block__logo {
+  width: 176rpx;
+  height: 176rpx;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  border: 2rpx solid rgba(255, 255, 255, 0.7);
-  border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.18);
+  border-radius: 44rpx;
+  background: #ffffff;
+  box-shadow: 0 12rpx 34rpx rgba(41, 37, 36, 0.08);
 }
 
-.credits-pill text {
-  color: #ffffff;
-  font-size: $font-secondary;
+.brand-block__logo text {
+  font-size: 88rpx;
 }
 
-.credits-pill__number {
-  margin-top: 4rpx;
-  font-size: $font-title !important;
+.brand-block__name {
+  margin-top: 28rpx;
+  color: #1c1917;
+  font-family: Georgia, "Songti SC", "STSong", serif;
+  font-size: 64rpx;
   font-weight: 800;
+  letter-spacing: 2rpx;
 }
 
-.home-page__section-title {
-  display: block;
-  margin: 48rpx 0 24rpx;
-  font-size: $font-title;
-  font-weight: 800;
+.brand-block__subtitle {
+  margin-top: 14rpx;
+  color: #78716c;
+  font-size: 34rpx;
 }
 
 .home-page__loading {
   display: block;
   padding: 30rpx 0;
   color: $color-secondary;
+  text-align: center;
 }
 
 .module-list {
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 40rpx;
 }
 
 .module-card {
-  padding: 28rpx;
+  min-height: 210rpx;
+  padding: 40rpx;
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  border: 3rpx solid $color-border;
-  border-radius: $radius-card;
-  background: $color-surface;
-  box-shadow: $shadow-card;
+  gap: 32rpx;
+  border: 3rpx solid;
+  border-radius: 48rpx;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.module-card:active {
+  transform: scale(0.985);
 }
 
 .module-card--disabled {
-  border-color: #d6d3d1;
-  background: #f5f5f4;
-  color: $color-disabled-text;
+  filter: saturate(0.45);
+  opacity: 0.78;
 }
 
 .module-card__icon {
-  width: 104rpx;
-  height: 104rpx;
+  flex: 0 0 128rpx;
+  width: 128rpx;
+  height: 128rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 24rpx;
-  background: $color-primary-soft;
-  font-size: 52rpx;
+  border-radius: 34rpx;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.module-card__icon text {
+  font-size: 64rpx;
 }
 
 .module-card__body {
@@ -111,46 +155,38 @@
 .module-card__heading {
   display: flex;
   align-items: center;
-  gap: 14rpx;
+  flex-wrap: wrap;
+  gap: 12rpx;
 }
 
 .module-card__name {
-  font-size: 40rpx;
+  color: inherit;
+  font-size: 46rpx;
   font-weight: 800;
 }
 
 .module-card__soon {
   padding: 6rpx 12rpx;
+  border: 2rpx solid currentColor;
   border-radius: 12rpx;
-  background: #e7e5e4;
-  color: $color-disabled-text;
-  font-size: $font-secondary;
+  color: inherit;
+  font-size: 28rpx;
+  line-height: 1.2;
 }
 
-.module-card__description,
-.module-card__credits {
+.module-card__description {
   display: block;
-  margin-top: 10rpx;
-  font-size: $font-secondary;
-  color: $color-secondary;
-  line-height: 1.6;
+  margin-top: 14rpx;
+  color: inherit;
+  font-size: 32rpx;
+  line-height: 1.55;
+  opacity: 0.78;
 }
 
-.module-card__arrow,
-.profile-entry__arrow {
-  font-size: 52rpx;
-  color: $color-primary;
-}
-
-.profile-entry {
-  margin-top: 32rpx;
-  padding: 22rpx 28rpx;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 3rpx solid $color-primary;
-  border-radius: $radius-card;
-  background: $color-surface;
-  color: $color-primary-strong;
-  font-weight: 800;
+.home-footer {
+  display: block;
+  padding: 76rpx 0 24rpx;
+  color: #a8a29e;
+  font-size: 28rpx;
+  text-align: center;
 }

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Text, View } from "@tarojs/components";
 import Taro, { useDidShow } from "@tarojs/taro";
-import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type MpModule, type MpUser } from "../../services/api";
+import { clearSession } from "../../store/auth";
 import "./index.scss";
 
 export default function HomePage() {
@@ -34,51 +34,60 @@ export default function HomePage() {
     }
     if (module.id === "copy-writer") {
       await Taro.navigateTo({ url: "/pages/copywriter/index" });
+    } else if (module.id === "silver-lens") {
+      await Taro.navigateTo({ url: "/pages/silver-lens/index" });
     }
+  }
+
+  async function logout() {
+    clearSession();
+    await Taro.reLaunch({ url: "/pages/login/index" });
   }
 
   return (
     <View className="home-page">
-      <PageHeader title="乐享 AI" showBack={false} />
+      <View className="home-nav">
+        <View className="account-pill">
+          <View className="account-pill__credits clickable" onClick={() => Taro.navigateTo({ url: "/pages/profile/index" })}>
+            <Text className="account-pill__coin">🪙</Text>
+            <Text className="account-pill__number">{user?.credits ?? "--"}</Text>
+          </View>
+          <View className="account-pill__divider" />
+          <Text className="account-pill__logout clickable" onClick={logout}>退出</Text>
+        </View>
+      </View>
       <View className="home-page__content">
-        <View className="welcome-card">
-          <View>
-            <Text className="welcome-card__eyebrow">欢迎回来</Text>
-            <Text className="welcome-card__name">{user?.name || "乐享用户"}，您好 👋</Text>
-          </View>
-          <View className="credits-pill clickable" onClick={() => Taro.navigateTo({ url: "/pages/profile/index" })}>
-            <Text>积分</Text>
-            <Text className="credits-pill__number">{user?.credits ?? "--"}</Text>
-          </View>
+        <View className="brand-block">
+          <View className="brand-block__logo"><Text>✨</Text></View>
+          <Text className="brand-block__name">乐享AI</Text>
+          <Text className="brand-block__subtitle">您的智能生活好帮手</Text>
         </View>
 
-        <Text className="home-page__section-title">今天想用 AI 做什么？</Text>
         {loading ? <Text className="home-page__loading">正在加载，请稍候…</Text> : null}
         <View className="module-list">
           {modules.map((module) => (
             <View
               key={module.id}
               className={`module-card clickable ${module.enabled ? "" : "module-card--disabled"}`}
+              style={{
+                backgroundColor: module.theme?.bg,
+                borderColor: module.theme?.border,
+                color: module.theme?.title,
+              }}
               onClick={() => openModule(module)}
             >
-              <Text className="module-card__icon">{module.icon}</Text>
+              <View className="module-card__icon"><Text>{module.icon}</Text></View>
               <View className="module-card__body">
                 <View className="module-card__heading">
                   <Text className="module-card__name">{module.name}</Text>
                   {!module.enabled ? <Text className="module-card__soon">即将上线</Text> : null}
                 </View>
                 <Text className="module-card__description">{module.description}</Text>
-                <Text className="module-card__credits">{module.creditCost} 积分 / 次</Text>
               </View>
-              <Text className="module-card__arrow">›</Text>
             </View>
           ))}
         </View>
-
-        <View className="profile-entry clickable" onClick={() => Taro.navigateTo({ url: "/pages/profile/index" })}>
-          <Text>👤 我的积分与记录</Text>
-          <Text className="profile-entry__arrow">›</Text>
-        </View>
+        <Text className="home-footer">© 2026 乐享AI · 科技温暖生活</Text>
       </View>
     </View>
   );
