@@ -184,6 +184,30 @@ describe("M4 小程序运维接口", () => {
     expect(executions).toBe(1);
   });
 
+  it("容量被成功缓存占满时淘汰最旧完成项并接收新操作", async () => {
+    let executions = 0;
+    const app = express();
+    app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
+    app.use("/api/mp", createMpIdempotencyMiddleware({ maxEntries: 1 }));
+    app.post("/api/mp/generate", (_req, res) => {
+      executions += 1;
+      res.json({ execution: executions });
+    });
+    const baseUrl = await listen(app);
+    const first = await fetch(`${baseUrl}/generate`, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "x-idempotency-key": "story-1234567890abcdef" },
+    });
+    expect(first.status).toBe(200);
+    const second = await fetch(`${baseUrl}/generate`, {
+      method: "POST",
+      headers: { authorization: "Bearer token", "x-idempotency-key": "story-fedcba0987654321" },
+    });
+    expect(second.status).toBe(200);
+    expect(executions).toBe(2);
+  });
+
   it("积分不足等明确失败不缓存，补充条件后可再次执行", async () => {
     let executions = 0;
     const app = express();

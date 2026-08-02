@@ -80,6 +80,16 @@ export function createMpIdempotencyMiddleware(options: { maxEntries?: number } =
     });
   }
 
+  function evictOldestSettled(): boolean {
+    let candidate: string | undefined;
+    entries.forEach((entry, key) => {
+      if (!candidate && entry.settled) candidate = key;
+    });
+    if (!candidate) return false;
+    entries.delete(candidate);
+    return true;
+  }
+
   return (req: Request, res: Response, next: NextFunction) => {
     const operationId = req.header("x-idempotency-key") ?? "";
     if (req.method !== "POST" || !IDEMPOTENCY_KEY_PATTERN.test(operationId)) {
@@ -113,7 +123,7 @@ export function createMpIdempotencyMiddleware(options: { maxEntries?: number } =
       }).catch(next);
       return;
     }
-    if (entries.size >= maxEntries) {
+    if (entries.size >= maxEntries && !evictOldestSettled()) {
       res.status(503).json({ error: { code: "IDEMPOTENCY_BUSY", message: "生成请求较多，请稍后再试" } });
       return;
     }
