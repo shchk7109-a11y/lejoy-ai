@@ -15,6 +15,8 @@ import {
 } from "../minimaxService";
 import { storageDelete, storageGet, storagePut } from "../storage";
 import type { MpAuthenticatedRequest } from "./auth";
+import { appendChatDisclaimer, blocksChatInput, blocksChatOutput } from "./chat-guard";
+import { CHAT_MEDICAL_GUIDANCE, CHAT_SYSTEM_PROMPT } from "./chat-persona";
 import { createMediaCheckTask, findMediaCheckTaskByFile } from "./media-check-tasks";
 import { checkMediaSecurity, checkTextSecurity, type MediaSecuritySubmission, type SecurityCheckResult } from "./security";
 
@@ -300,6 +302,82 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     res.json({ ...charged.value, credits: charged.credits });
   }));
 
+  router.post("/chat", asyncRoute(async (req, res) => {
+    const message = nonEmpty(req.body?.message);
+    const historyInput = req.body?.history;
+    if (!message || message.length > 500 || !Array.isArray(historyInput) || historyInput.length > 20) {
+      badRequest(res, "请输入 500 字以内的问题，对话历史不能超过 20 轮");
+      return;
+    }
+    const history = historyInput.map((item: unknown) => {
+      if (!item || typeof item !== "object") return undefined;
+      const role = (item as { role?: unknown }).role;
+      const content = nonEmpty((item as { content?: unknown }).content);
+      if ((role !== "user" && role !== "assistant") || !content || content.length > 500) return undefined;
+      return { role, content };
+    });
+    if (history.some((item) => !item)) {
+      badRequest(res, "对话历史格式无效");
+      return;
+    }
+    const safeHistory = history.slice(-12) as Array<{ role: "user" | "assistant"; content: string }>;
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const inputCheck = await deps.checkTextSecurity(message, user.openId);
+    if (!inputCheck.safe) {
+      res.status(422).json({ error: { code: "CONTENT_REJECTED", message: inputCheck.reason ?? "输入内容未通过安全检查" } });
+      return;
+    }
+
+    if (blocksChatInput(message)) {
+      const reply = appendChatDisclaimer(CHAT_MEDICAL_GUIDANCE);
+      const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+      if (!outputCheck.safe) {
+        res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "回复内容未通过安全检查" } });
+        return;
+      }
+      res.json({ reply, credits: user.credits, guarded: true });
+      return;
+    }
+
+    try {
+      const charged = await deps.withCreditCharge(
+        user.id,
+        1,
+        "life_chat",
+        async () => {
+          const generated = await deps.aiChatMulti({
+            systemPrompt: CHAT_SYSTEM_PROMPT,
+            history: safeHistory,
+            message,
+          });
+          if (blocksChatOutput(generated)) throw new ChatOutputBlockedError();
+          const reply = appendChatDisclaimer(generated);
+          const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+          if (!outputCheck.safe) throw new ChatContentRejectedError(outputCheck.reason ?? "回复内容未通过安全检查");
+          return reply;
+        },
+        "AI万花筒",
+      );
+      res.json({ reply: charged.value, credits: charged.credits, guarded: false });
+    } catch (error) {
+      if (error instanceof ChatOutputBlockedError) {
+        const reply = appendChatDisclaimer(CHAT_MEDICAL_GUIDANCE);
+        const outputCheck = await deps.checkTextSecurity(reply, user.openId);
+        if (!outputCheck.safe) {
+          res.status(422).json({ error: { code: "CONTENT_REJECTED", message: outputCheck.reason ?? "回复内容未通过安全检查" } });
+          return;
+        }
+        res.json({ reply, credits: await deps.getCredits(user.id), guarded: true });
+        return;
+      }
+      if (error instanceof ChatContentRejectedError) {
+        res.status(422).json({ error: { code: "CONTENT_REJECTED", message: error.message } });
+        return;
+      }
+      throw error;
+    }
+  }));
+
   router.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error("[MP M3 REST]", error);
     if (error instanceof Error && error.message.includes("积分不足")) {
@@ -317,3 +395,7 @@ function isFourPageStory(story: StoryResult): boolean {
     page.pageNumber === index + 1 && Boolean(page.text.trim()) && Boolean(page.imagePrompt.trim())
   ));
 }
+
+class ChatOutputBlockedError extends Error {}
+
+class ChatContentRejectedError extends Error {}

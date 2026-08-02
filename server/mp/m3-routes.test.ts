@@ -3,6 +3,8 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../../drizzle/schema";
+import { withCreditCharge } from "../credits-charge";
+import { CHAT_DISCLAIMER, CHAT_MEDICAL_GUIDANCE } from "./chat-persona";
 import { createM3Router, type M3Dependencies } from "./m3-routes";
 
 const testUser: User = {
@@ -281,5 +283,82 @@ describe("M3 生活助手 REST 接口", () => {
     expect(queryHealthInfo).toHaveBeenNthCalledWith(1, { textHint: "苹果的营养", imageUrl: undefined });
     expect(queryHealthInfo).toHaveBeenNthCalledWith(2, { textHint: undefined, imageUrl: "https://cdn.example/uploads/7/apple.png" });
     expect(deps.withCreditCharge).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("M3 万花筒合规聊天 REST 接口", () => {
+  it("输入红线直接返回就医引导，不调模型也不扣分", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const response = await post(baseUrl, "/chat", {
+      message: "血压高吃什么药",
+      history: [],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      reply: `${CHAT_MEDICAL_GUIDANCE}\n\n${CHAT_DISCLAIMER}`,
+      credits: 100,
+      guarded: true,
+    });
+    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(2);
+    expect(deps.aiChatMulti).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
+
+  it("模型输出包含药名或剂量时过滤为就医引导并退分", async () => {
+    const consume = vi.fn(async () => 99);
+    const refund = vi.fn(async () => 100);
+    const charged = vi.fn(async (userId, cost, feature, fn, description) => withCreditCharge(
+      userId,
+      cost,
+      feature,
+      fn,
+      description,
+      { consume, refund },
+    )) as M3Dependencies["withCreditCharge"];
+    const deps = dependencies({
+      withCreditCharge: charged,
+      aiChatMulti: vi.fn(async () => "建议服用阿司匹林，每次20mg。"),
+      getCredits: vi.fn(async () => 100),
+    });
+    const baseUrl = await startApp(deps);
+    const response = await post(baseUrl, "/chat", {
+      message: "平时怎样照顾身体",
+      history: [{ role: "assistant", content: "我们聊聊日常习惯。" }],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      reply: `${CHAT_MEDICAL_GUIDANCE}\n\n${CHAT_DISCLAIMER}`,
+      credits: 100,
+      guarded: true,
+    });
+    expect(consume).toHaveBeenCalledWith(7, 1, "life_chat", "AI万花筒");
+    expect(refund).toHaveBeenCalledWith(7, 1, "life_chat", "AI万花筒生成失败退还");
+  });
+
+  it("正常生活常识问题走多轮模型、扣 1 分、内容双向送检并带免责声明", async () => {
+    const aiChatMulti = vi.fn(async () => "可以从固定起床时间、白天适量活动和睡前放松开始。");
+    const deps = dependencies({ aiChatMulti });
+    const baseUrl = await startApp(deps);
+    const history = [
+      { role: "user", content: "最近想调整作息" },
+      { role: "assistant", content: "可以逐步调整。" },
+    ];
+    const response = await post(baseUrl, "/chat", {
+      message: "睡前有哪些放松活动",
+      history,
+    });
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { reply: string; credits: number; guarded: boolean };
+    expect(body.reply).toBe(`可以从固定起床时间、白天适量活动和睡前放松开始。\n\n${CHAT_DISCLAIMER}`);
+    expect(body).toMatchObject({ credits: 99, guarded: false });
+    expect(aiChatMulti).toHaveBeenCalledWith(expect.objectContaining({ history, message: "睡前有哪些放松活动" }));
+    expect(deps.checkTextSecurity).toHaveBeenCalledTimes(2);
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(1, "睡前有哪些放松活动", "mp-openid");
+    expect(deps.checkTextSecurity).toHaveBeenNthCalledWith(2, body.reply, "mp-openid");
+    expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 1, "life_chat", expect.any(Function), "AI万花筒");
   });
 });
