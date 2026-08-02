@@ -4,6 +4,7 @@ set -Eeuo pipefail
 APP_DIR="/opt/lejoy-ai"
 BRANCH="codex/m4-release-ready"
 REPOSITORY="https://github.com/shchk7109-a11y/lejoy-ai.git"
+GIT_BUNDLE_PATH="${GIT_BUNDLE_PATH:-}"
 ENV_FILE="${APP_DIR}/.env"
 SECRETS_FILE="/root/DEPLOY_SECRETS.txt"
 LOG_FILE="/var/log/lejoy-ai-deploy.log"
@@ -24,25 +25,35 @@ exec > >(tee -a "${LOG_FILE}") 2>&1
 printf '[%s] D1 app deploy start mode=%s\n' "$(date --iso-8601=seconds)" "${MODE}"
 
 install -d -m 0755 /opt
+fetch_source="${REPOSITORY}"
+if [[ -n "${GIT_BUNDLE_PATH}" ]]; then
+  if [[ ! -f "${GIT_BUNDLE_PATH}" ]]; then
+    printf 'Git bundle 不存在：%s\n' "${GIT_BUNDLE_PATH}" >&2
+    exit 1
+  fi
+  git bundle verify "${GIT_BUNDLE_PATH}"
+  fetch_source="${GIT_BUNDLE_PATH}"
+fi
 if [[ ! -d "${APP_DIR}/.git" ]]; then
   if [[ -e "${APP_DIR}" ]]; then
     printf '%s\n' "${APP_DIR} 已存在但不是 Git 仓库，停止部署" >&2
     exit 1
   fi
-  git clone --branch "${BRANCH}" --single-branch "${REPOSITORY}" "${APP_DIR}"
+  git clone --branch "${BRANCH}" --single-branch "${fetch_source}" "${APP_DIR}"
+  git -C "${APP_DIR}" remote set-url origin "${REPOSITORY}"
 else
   cd "${APP_DIR}"
   if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
     printf '%s\n' "生产仓库存在未提交的受跟踪文件修改，停止部署" >&2
     exit 1
   fi
-  git fetch origin "${BRANCH}"
+  git fetch "${fetch_source}" "${BRANCH}:refs/remotes/origin/${BRANCH}"
   if git show-ref --verify --quiet "refs/heads/${BRANCH}"; then
     git checkout "${BRANCH}"
   else
     git checkout --track -b "${BRANCH}" "origin/${BRANCH}"
   fi
-  git pull --ff-only origin "${BRANCH}"
+  git merge --ff-only "origin/${BRANCH}"
 fi
 
 cd "${APP_DIR}"
