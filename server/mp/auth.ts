@@ -53,6 +53,10 @@ export function createMpAuthMiddleware(
   getUserById: (id: number) => Promise<User | undefined>,
 ): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
+    if ((req as Partial<MpAuthenticatedRequest>).mpUser?.id) {
+      next();
+      return;
+    }
     const authorization = req.header("authorization") ?? "";
     const match = authorization.match(/^Bearer\s+(.+)$/i);
     if (!match) {

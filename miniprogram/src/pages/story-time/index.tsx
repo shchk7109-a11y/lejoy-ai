@@ -29,7 +29,14 @@ const STORY_VOICES = [
 
 type Step = "theme" | "child" | "topics" | "result";
 type StoryImagePlan = { page: StoryPage; operationId: string };
-type StorySpeechPlan = { pageNumber: number; operationId: string };
+type StorySpeechPlan = {
+  pageNumber: number;
+  operationId: string;
+  text: string;
+  voiceType: string;
+  isFirstPage: boolean;
+  title?: string;
+};
 
 export default function StoryTimePage() {
   const [step, setStep] = useState<Step>("theme");
@@ -119,7 +126,14 @@ export default function StoryTimePage() {
     if (!pages.length || busyMessage || illustrating) return;
     const plans = pages
       .filter((page) => !page.audioUrl)
-      .map((page) => ({ pageNumber: page.pageNumber, operationId: createOperationId(`story-speech-${page.pageNumber}`) }));
+      .map((page) => ({
+        pageNumber: page.pageNumber,
+        operationId: createOperationId(`story-speech-${page.pageNumber}`),
+        text: page.text,
+        voiceType,
+        isFirstPage: page.pageNumber === 1,
+        title: page.pageNumber === 1 ? title : undefined,
+      }));
     if (!plans.length) playSequence(pagesRef.current, 0);
     else await generateStorySpeeches(plans);
   }
@@ -135,11 +149,11 @@ export default function StoryTimePage() {
         if (!page || page.audioUrl) continue;
         try {
           const speech = await mpApi.generateStoryPageSpeech({
-            pageNumber: page.pageNumber,
-            text: page.text,
-            voiceType,
-            isFirstPage: page.pageNumber === 1,
-            title: page.pageNumber === 1 ? title : undefined,
+            pageNumber: plan.pageNumber,
+            text: plan.text,
+            voiceType: plan.voiceType,
+            isFirstPage: plan.isFirstPage,
+            title: plan.title,
           }, plan.operationId);
           savePagePatch(page.pageNumber, { audioUrl: speech.audioUrl });
         } catch (error) {

@@ -33,6 +33,7 @@ describe("M4 五模块统一错误态", () => {
     const content = mini("src/pages/story-time/index.tsx");
     expect(content).toContain("retryStoryImages");
     expect(content).toContain("generateStorySpeeches");
+    expect(content).toContain("voiceType: string");
     expect(content).not.toContain("const speeches = await Promise.all(pages.map");
   });
 

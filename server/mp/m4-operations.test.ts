@@ -20,6 +20,11 @@ async function listen(app: express.Express): Promise<string> {
   return `http://127.0.0.1:${address.port}/api/mp`;
 }
 
+const setAuthenticatedUser: RequestHandler = (req, _res, next) => {
+  (req as typeof req & { mpUser: { id: number } }).mpUser = { id: 7 };
+  next();
+};
+
 describe("M4 小程序运维接口", () => {
   it("健康检查无需登录并返回版本", async () => {
     const app = express();
@@ -65,6 +70,7 @@ describe("M4 小程序运维接口", () => {
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const app = express();
     app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
     app.use("/api/mp", createMpIdempotencyMiddleware());
     app.post("/api/mp/generate", async (_req, res) => {
       executions += 1;
@@ -92,6 +98,7 @@ describe("M4 小程序运维接口", () => {
     let executions = 0;
     const app = express();
     app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
     app.use("/api/mp", createMpIdempotencyMiddleware());
     app.post("/api/mp/generate", (_req, res) => {
       executions += 1;
@@ -111,6 +118,7 @@ describe("M4 小程序运维接口", () => {
     let executions = 0;
     const app = express();
     app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
     app.use("/api/mp", createMpIdempotencyMiddleware());
     app.post("/api/mp/generate", (req, res) => {
       executions += 1;
@@ -128,5 +136,72 @@ describe("M4 小程序运维接口", () => {
     expect(conflict.status).toBe(409);
     await expect(conflict.json()).resolves.toEqual({ error: { code: "IDEMPOTENCY_CONFLICT", message: "同一操作号的请求内容不一致" } });
     expect(executions).toBe(1);
+  });
+
+  it("幂等请求必须先通过鉴权并按已验证用户分区", async () => {
+    let executions = 0;
+    const app = express();
+    app.use(express.json());
+    app.use("/api/mp", createMpIdempotencyMiddleware());
+    app.post("/api/mp/generate", (_req, res) => {
+      executions += 1;
+      res.json({ ok: true });
+    });
+    const response = await fetch(`${await listen(app)}/generate`, {
+      method: "POST",
+      headers: { authorization: "Bearer fake-token", "x-idempotency-key": "story-1234567890abcdef" },
+    });
+    expect(response.status).toBe(401);
+    expect(executions).toBe(0);
+  });
+
+  it("容量满时拒绝新操作且不会淘汰仍在处理的请求", async () => {
+    let executions = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const app = express();
+    app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
+    app.use("/api/mp", createMpIdempotencyMiddleware({ maxEntries: 1 }));
+    app.post("/api/mp/generate", async (_req, res) => {
+      executions += 1;
+      await gate;
+      res.json({ ok: true });
+    });
+    const baseUrl = await listen(app);
+    const headers = { authorization: "Bearer token", "x-idempotency-key": "story-1234567890abcdef" };
+    const first = fetch(`${baseUrl}/generate`, { method: "POST", headers });
+    await vi.waitFor(() => expect(executions).toBe(1));
+    const overflow = await fetch(`${baseUrl}/generate`, {
+      method: "POST",
+      headers: { ...headers, "x-idempotency-key": "story-fedcba0987654321" },
+    });
+    expect(overflow.status).toBe(503);
+    const joined = fetch(`${baseUrl}/generate`, { method: "POST", headers });
+    release();
+    expect((await first).status).toBe(200);
+    expect((await joined).status).toBe(200);
+    expect(executions).toBe(1);
+  });
+
+  it("积分不足等明确失败不缓存，补充条件后可再次执行", async () => {
+    let executions = 0;
+    const app = express();
+    app.use(express.json());
+    app.use("/api/mp", setAuthenticatedUser);
+    app.use("/api/mp", createMpIdempotencyMiddleware());
+    app.post("/api/mp/generate", (_req, res) => {
+      executions += 1;
+      if (executions === 1) res.status(402).json({ error: { code: "INSUFFICIENT_CREDITS" } });
+      else res.json({ ok: true });
+    });
+    const baseUrl = await listen(app);
+    const options = {
+      method: "POST",
+      headers: { authorization: "Bearer token", "x-idempotency-key": "life-1234567890abcdef" },
+    } as const;
+    expect((await fetch(`${baseUrl}/generate`, options)).status).toBe(402);
+    expect((await fetch(`${baseUrl}/generate`, options)).status).toBe(200);
+    expect(executions).toBe(2);
   });
 });

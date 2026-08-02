@@ -91,6 +91,13 @@ export function createMpRouter(
   const requireAuth = createMpAuthMiddleware(deps.jwtSecret, deps.getUserById);
 
   router.use(createMpRequestLogMiddleware(deps.requestLog));
+  router.use((req, res, next) => {
+    if (req.method === "POST" && req.header("x-idempotency-key")) {
+      requireAuth(req, res, next);
+      return;
+    }
+    next();
+  });
   router.use(createMpIdempotencyMiddleware());
   router.get("/health", (_req, res) => {
     res.json({ ok: true, version: MP_API_VERSION });

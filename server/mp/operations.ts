@@ -14,7 +14,12 @@ export type MpRequestLogSink = (entry: MpRequestLog) => void;
 
 type RequestWithOptionalUser = Request & { mpUser?: { id?: unknown } };
 type IdempotentResponse = { statusCode: number; body: unknown };
-type IdempotentEntry = { promise: Promise<IdempotentResponse>; expiresAt: number; requestFingerprint: string };
+type IdempotentEntry = {
+  promise: Promise<IdempotentResponse>;
+  expiresAt: number;
+  requestFingerprint: string;
+  settled: boolean;
+};
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9-]{16,80}$/;
 const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
@@ -65,25 +70,25 @@ export function sendMpTimeoutError(error: unknown, res: Response): boolean {
   return true;
 }
 
-export function createMpIdempotencyMiddleware(): RequestHandler {
+export function createMpIdempotencyMiddleware(options: { maxEntries?: number } = {}): RequestHandler {
   const entries = new Map<string, IdempotentEntry>();
+  const maxEntries = Math.max(1, options.maxEntries ?? IDEMPOTENCY_MAX_ENTRIES);
 
   function prune(now: number): void {
     entries.forEach((entry, key) => {
-      if (entry.expiresAt <= now) entries.delete(key);
+      if (entry.settled && entry.expiresAt <= now) entries.delete(key);
     });
-    while (entries.size >= IDEMPOTENCY_MAX_ENTRIES) {
-      const oldest = entries.keys().next().value as string | undefined;
-      if (!oldest) break;
-      entries.delete(oldest);
-    }
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
     const operationId = req.header("x-idempotency-key") ?? "";
-    const authorization = req.header("authorization") ?? "";
-    if (req.method !== "POST" || !authorization || !IDEMPOTENCY_KEY_PATTERN.test(operationId)) {
+    if (req.method !== "POST" || !IDEMPOTENCY_KEY_PATTERN.test(operationId)) {
       next();
+      return;
+    }
+    const candidateUserId = (req as RequestWithOptionalUser).mpUser?.id;
+    if (typeof candidateUserId !== "number" || !Number.isInteger(candidateUserId) || candidateUserId <= 0) {
+      res.status(401).json({ error: { code: "UNAUTHORIZED", message: "登录已失效，请重新登录" } });
       return;
     }
 
@@ -91,7 +96,7 @@ export function createMpIdempotencyMiddleware(): RequestHandler {
     prune(now);
     const requestFingerprint = createHash("sha256").update(JSON.stringify(req.body ?? null)).digest("hex");
     const cacheKey = createHash("sha256")
-      .update(authorization)
+      .update(String(candidateUserId))
       .update("\0")
       .update(req.path)
       .update("\0")
@@ -108,15 +113,30 @@ export function createMpIdempotencyMiddleware(): RequestHandler {
       }).catch(next);
       return;
     }
+    if (entries.size >= maxEntries) {
+      res.status(503).json({ error: { code: "IDEMPOTENCY_BUSY", message: "生成请求较多，请稍后再试" } });
+      return;
+    }
 
     let resolveEntry!: (snapshot: IdempotentResponse) => void;
     const promise = new Promise<IdempotentResponse>((resolve) => { resolveEntry = resolve; });
-    entries.set(cacheKey, { promise, expiresAt: now + IDEMPOTENCY_TTL_MS, requestFingerprint });
+    const entry: IdempotentEntry = {
+      promise,
+      expiresAt: now + IDEMPOTENCY_TTL_MS,
+      requestFingerprint,
+      settled: false,
+    };
+    entries.set(cacheKey, entry);
     const originalJson = res.json.bind(res);
     res.json = ((body: unknown) => {
       const snapshot = { statusCode: res.statusCode, body };
       resolveEntry(snapshot);
-      if (res.statusCode >= 500) entries.delete(cacheKey);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        entry.settled = true;
+        entry.expiresAt = Date.now() + IDEMPOTENCY_TTL_MS;
+      } else {
+        entries.delete(cacheKey);
+      }
       return originalJson(body);
     }) as Response["json"];
     next();
