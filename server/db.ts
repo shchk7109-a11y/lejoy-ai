@@ -1,4 +1,4 @@
-import { eq, desc, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, aiModels, creditTransactions, customerInfo, InsertAiModel, InsertCreditTransaction, InsertCustomerInfo } from "../drizzle/schema";
 import { ENV } from './_core/env';
@@ -105,18 +105,59 @@ export async function getAllUsers() {
 // ─── 积分系统 ─────────────────────────────────────────────────────────────────
 
 /** 积分消耗：原子操作，返回新余额；余额不足时抛出错误 */
+export async function consumeCreditsInDatabase(
+  db: ReturnType<typeof drizzle>,
+  userId: number,
+  amount: number,
+  feature: string,
+  description: string,
+): Promise<number> {
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new Error("积分扣减数量必须为正整数");
+  }
+
+  return db.transaction(async (tx) => {
+    const updateResult = await tx
+      .update(users)
+      .set({ credits: sql`${users.credits} - ${amount}` })
+      .where(and(eq(users.id, userId), gte(users.credits, amount)));
+
+    if (updateResult[0].affectedRows === 0) {
+      const currentUsers = await tx
+        .select({ credits: users.credits })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const currentUser = currentUsers[0];
+      if (!currentUser) throw new Error("用户不存在");
+      throw new Error(`积分不足，当前余额 ${currentUser.credits}，需要 ${amount} 积分`);
+    }
+
+    const updatedUsers = await tx
+      .select({ credits: users.credits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const updatedUser = updatedUsers[0];
+    if (!updatedUser) throw new Error("用户不存在");
+
+    await tx.insert(creditTransactions).values({
+      userId,
+      amount: -amount,
+      type: "consume",
+      feature,
+      description,
+      balanceAfter: updatedUser.credits,
+    });
+
+    return updatedUser.credits;
+  });
+}
+
 export async function consumeCredits(userId: number, amount: number, feature: string, description: string): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("数据库不可用");
-  const user = await getUserById(userId);
-  if (!user) throw new Error("用户不存在");
-  if (user.credits < amount) throw new Error(`积分不足，当前余额 ${user.credits}，需要 ${amount} 积分`);
-  const newBalance = user.credits - amount;
-  await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
-  await db.insert(creditTransactions).values({
-    userId, amount: -amount, type: 'consume', feature, description, balanceAfter: newBalance,
-  });
-  return newBalance;
+  return consumeCreditsInDatabase(db, userId, amount, feature, description);
 }
 
 /** 积分充值：管理员给用户增加积分 */
