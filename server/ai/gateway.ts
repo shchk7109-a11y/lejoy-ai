@@ -12,7 +12,13 @@ import { ENV } from "../_core/env";
 import { callGeminiText, callGeminiImage, callGeminiTTS } from "../geminiService";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { kimiChat, KimiMessage } from "./kimiClient";
-import { volcGenerateImage, AspectRatio } from "./volcImageClient";
+import {
+  volcGenerateImage,
+  isUnsupportedAdaptiveSizeError,
+  nearestSupportedAspectRatio,
+  AspectRatio,
+} from "./volcImageClient";
+import { readImageDimensions } from "./imageDimensions";
 import { dashscopeTTS, dashscopeASR } from "./aliVoiceClient";
 import { invokeMiniMaxText, invokeMiniMaxImage, invokeMiniMaxTTS } from "./minimaxClient";
 
@@ -70,6 +76,7 @@ export function pickAsrProvider(setting: string, keys: ProviderKeys): "ali" | "f
 /** 拉取远程图片转为 data URL（供需要 base64 输入的供应商使用） */
 async function fetchAsDataUrl(url: string): Promise<{ dataUrl: string; base64: string; mimeType: string }> {
   const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`图片下载失败（${resp.status}）`);
   const base64 = Buffer.from(await resp.arrayBuffer()).toString("base64");
   const mimeType = resp.headers.get("content-type") ?? "image/jpeg";
   return { dataUrl: `data:${mimeType};base64,${base64}`, base64, mimeType };
@@ -204,7 +211,21 @@ export async function aiEditImage(params: {
   const provider = pickImageProvider(ENV.aiImageProvider, currentKeys());
 
   if (provider === "volc") {
-    return volcGenerateImage({ prompt: params.prompt, imageUrls: [params.imageUrl], aspectRatio: "1:1" });
+    try {
+      // Seedream 4 使用 2K 分辨率档时会依据参考图自适应画布比例。
+      return await volcGenerateImage({ prompt: params.prompt, imageUrls: [params.imageUrl], size: "2K" });
+    } catch (error) {
+      if (!isUnsupportedAdaptiveSizeError(error)) throw error;
+      const response = await fetch(params.imageUrl);
+      if (!response.ok) throw new Error(`原图尺寸读取失败（${response.status}）`);
+      const dimensions = readImageDimensions(Buffer.from(await response.arrayBuffer()));
+      if (!dimensions) throw new Error("无法识别原图尺寸，已停止处理以避免裁切构图");
+      return volcGenerateImage({
+        prompt: params.prompt,
+        imageUrls: [params.imageUrl],
+        aspectRatio: nearestSupportedAspectRatio(dimensions.width, dimensions.height),
+      });
+    }
   }
   // minimax image-01 不支持图生图编辑，降级到 gemini
   const { base64, mimeType } = await fetchAsDataUrl(params.imageUrl);

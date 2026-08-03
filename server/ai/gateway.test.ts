@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { pickTextProvider, pickImageProvider, pickTtsProvider, pickAsrProvider, ProviderKeys } from "./gateway";
 import { buildKimiMessages } from "./kimiClient";
-import { mapAspectToSize } from "./volcImageClient";
+import { mapAspectToSize, nearestSupportedAspectRatio } from "./volcImageClient";
 import { mapVoice } from "./aliVoiceClient";
 
 const allKeys: ProviderKeys = { moonshot: true, ark: true, dashscope: true, minimax: true, gemini: true, forge: true };
@@ -63,6 +63,12 @@ describe("即梦尺寸映射", () => {
     expect(mapAspectToSize("4:3")).toBe("2304x1728");
     expect(mapAspectToSize("9:16")).toBe("1440x2560");
     expect(mapAspectToSize(undefined)).toBe("2048x2048");
+  });
+
+  it("原图比例映射到最接近的受支持尺寸档", () => {
+    expect(nearestSupportedAspectRatio(4032, 3024)).toBe("4:3");
+    expect(nearestSupportedAspectRatio(1080, 1920)).toBe("9:16");
+    expect(nearestSupportedAspectRatio(3000, 2800)).toBe("1:1");
   });
 });
 

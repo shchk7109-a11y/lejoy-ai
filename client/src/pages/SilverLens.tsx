@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Wand2, Palette, ZoomIn, Download, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -8,17 +8,9 @@ import { trpc } from "@/lib/trpc";
 import ImageUploader from "@/components/ImageUploader";
 import VoiceInput from "@/components/VoiceInput";
 import InsufficientCreditsModal from "@/components/InsufficientCreditsModal";
+import type { ArtStyle, PhotoEditPreset } from "../../../server/silverlens";
 
-const ART_STYLES = ["油画", "水彩", "素描", "水墨画", "印象派"] as const;
-
-const QUICK_EDITS = [
-  { label: "一键去路人", prompt: "Remove passersby and distractions from the background, keep the main subject clean." },
-  { label: "清晨阳光", prompt: "Adjust lighting to look like soft bright early morning sunlight." },
-  { label: "日落余晖", prompt: "Adjust lighting to look like a warm sunset with golden and orange hues." },
-  { label: "通透增强", prompt: "Enhance clarity, remove haze, make colors natural but vibrant." },
-  { label: "人像精修", prompt: "Subtly beautify people in the photo, improve skin tones while keeping it natural." },
-  { label: "背景虚化", prompt: "Keep main subject sharp and apply professional bokeh effect to background." },
-];
+const QUICK_EDITS: PhotoEditPreset[] = ["一键去路人", "清晨阳光", "日落余晖", "通透增强", "人像精修", "背景虚化"];
 
 type Mode = "home" | "edit" | "art";
 
@@ -27,11 +19,15 @@ export default function SilverLens() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [artStyle, setArtStyle] = useState<(typeof ART_STYLES)[number]>("油画");
+  const [artStyle, setArtStyle] = useState<ArtStyle>("油画");
   const [zoomImg, setZoomImg] = useState<string | null>(null);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
 
   const { data: creditsData } = trpc.credits.balance.useQuery();
+  const { data: artStyles = [] } = trpc.silverLens.styles.useQuery();
+  useEffect(() => {
+    if (artStyles[0]) setArtStyle(artStyles[0].name);
+  }, [artStyles]);
   const restoreMutation = trpc.silverLens.restorePhoto.useMutation({
     onSuccess: (data) => setResultUrl(data.imageUrl),
     onError: (err) => {
@@ -59,14 +55,14 @@ export default function SilverLens() {
     setPrompt("");
   };
 
-  const handleQuickEdit = (p: string) => {
+  const handleQuickEdit = (preset: PhotoEditPreset) => {
     if (!imageUrl) return toast.error("请先上传照片");
-    restoreMutation.mutate({ imageUrl, prompt: p });
+    restoreMutation.mutate({ imageUrl, preset });
   };
 
   const handleRestore = () => {
     if (!imageUrl) return toast.error("请先上传照片");
-    restoreMutation.mutate({ imageUrl, prompt: prompt || undefined });
+    restoreMutation.mutate({ imageUrl, preset: "通透增强", prompt: prompt || undefined });
   };
 
   const handleArt = () => {
@@ -132,8 +128,8 @@ export default function SilverLens() {
                 className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-5 text-center hover:bg-amber-100 active:scale-95 transition-all"
               >
                 <Wand2 className="w-10 h-10 text-amber-600 mx-auto mb-2" />
-                <p className="font-bold text-stone-800 text-lg">智能修图</p>
-                <p className="text-stone-500 text-xs mt-1">修复老照片、快速美化</p>
+                <p className="font-bold text-stone-800 text-lg">智能修图 &amp; 美化</p>
+                <p className="text-stone-500 text-xs mt-1">一键去除路人、调节光影、让照片更清晰</p>
                 <p className="text-amber-600 text-xs mt-2 font-medium">消耗 2 积分</p>
               </button>
               <button
@@ -142,7 +138,7 @@ export default function SilverLens() {
               >
                 <Palette className="w-10 h-10 text-purple-600 mx-auto mb-2" />
                 <p className="font-bold text-stone-800 text-lg">艺术画室</p>
-                <p className="text-stone-500 text-xs mt-1">油画、水彩、水墨画</p>
+                <p className="text-stone-500 text-xs mt-1">照片变油画、水墨画等艺术作品</p>
                 <p className="text-purple-600 text-xs mt-2 font-medium">消耗 2 积分</p>
               </button>
             </div>
@@ -164,13 +160,13 @@ export default function SilverLens() {
                 <div>
                   <p className="font-semibold text-stone-700 mb-3">⚡ 快速修图</p>
                   <div className="grid grid-cols-3 gap-2">
-                    {QUICK_EDITS.map((q) => (
+                    {QUICK_EDITS.map((preset) => (
                       <button
-                        key={q.label}
-                        onClick={() => handleQuickEdit(q.prompt)}
+                        key={preset}
+                        onClick={() => handleQuickEdit(preset)}
                         className="bg-white border border-stone-200 rounded-xl py-2.5 text-sm font-medium text-stone-700 hover:bg-amber-50 hover:border-amber-300 active:scale-95 transition-all"
                       >
-                        {q.label}
+                        {preset}
                       </button>
                     ))}
                   </div>
@@ -188,7 +184,7 @@ export default function SilverLens() {
                     />
                     <VoiceInput onResult={(t) => setPrompt((p) => p + t)} />
                   </div>
-                  <Button onClick={handleRestore} className="w-full mt-2 rounded-xl py-3 text-base" disabled={!prompt}>
+                  <Button onClick={handleRestore} className="w-full mt-2 rounded-xl py-3 text-base">
                     开始修图
                   </Button>
                 </div>
@@ -236,17 +232,17 @@ export default function SilverLens() {
                 <div>
                   <p className="font-semibold text-stone-700 mb-3">🎨 选择艺术风格</p>
                   <div className="flex flex-wrap gap-2">
-                    {ART_STYLES.map((s) => (
+                    {artStyles.map((style) => (
                       <button
-                        key={s}
-                        onClick={() => setArtStyle(s)}
+                        key={style.name}
+                        onClick={() => setArtStyle(style.name)}
                         className={`px-4 py-2 rounded-full border-2 font-medium text-sm transition-all ${
-                          artStyle === s
+                          artStyle === style.name
                             ? "bg-purple-600 border-purple-600 text-white"
                             : "bg-white border-stone-200 text-stone-700 hover:border-purple-300"
                         }`}
                       >
-                        {s}
+                        {style.emoji} {style.name}
                       </button>
                     ))}
                   </div>

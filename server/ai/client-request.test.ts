@@ -77,4 +77,22 @@ describe("Seedream 请求体", () => {
       watermark: true,
     });
   });
+
+  it("图生图可使用 2K 自适应尺寸，不强制正方形", async () => {
+    axiosMocks.post.mockResolvedValue({
+      data: { data: [{ b64_json: Buffer.from("image").toString("base64") }] },
+    });
+
+    await volcGenerateImage({
+      prompt: "严格保持原图构图",
+      imageUrls: ["https://cdn.example/original.jpg"],
+      size: "2K",
+    });
+
+    expect(axiosMocks.post.mock.calls[0][1]).toMatchObject({
+      image: "https://cdn.example/original.jpg",
+      size: "2K",
+    });
+    expect(axiosMocks.post.mock.calls[0][1].size).not.toBe("2048x2048");
+  });
 });

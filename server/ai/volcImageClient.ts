@@ -22,6 +22,30 @@ export function mapAspectToSize(aspectRatio?: AspectRatio): string {
   return aspectRatio ? map[aspectRatio] : "2048x2048";
 }
 
+/** 将任意原图宽高比映射到最接近的 Seedream 固定尺寸档。 */
+export function nearestSupportedAspectRatio(width: number, height: number): AspectRatio {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return "1:1";
+  const source = width / height;
+  const candidates: Array<[AspectRatio, number]> = [
+    ["1:1", 1],
+    ["16:9", 16 / 9],
+    ["4:3", 4 / 3],
+    ["3:4", 3 / 4],
+    ["9:16", 9 / 16],
+  ];
+  return candidates.reduce((best, candidate) =>
+    Math.abs(Math.log(source / candidate[1])) < Math.abs(Math.log(source / best[1])) ? candidate : best,
+  )[0];
+}
+
+/** 仅识别服务端明确指出 size 参数不受支持的 400 响应，避免对其他失败二次生成。 */
+export function isUnsupportedAdaptiveSizeError(error: unknown): boolean {
+  const candidate = error as { response?: { status?: number; data?: unknown }; message?: string };
+  if (candidate.response?.status !== 400) return false;
+  const detail = `${candidate.message ?? ""} ${JSON.stringify(candidate.response.data ?? "")}`;
+  return /size|尺寸/i.test(detail) && /invalid|unsupported|not support|不支持|无效/i.test(detail);
+}
+
 /**
  * 生成/编辑图像，返回 base64 字符串（不含 data: 前缀）
  * - 纯文生图：只传 prompt

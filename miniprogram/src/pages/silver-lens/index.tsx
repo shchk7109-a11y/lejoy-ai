@@ -1,24 +1,24 @@
-import { useRef, useState } from "react";
-import { Image, Text, View } from "@tarojs/components";
+import { useEffect, useRef, useState } from "react";
+import { Image, Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { ErrorState, useMpError } from "../../components/ErrorState";
 import { PageHeader } from "../../components/PageHeader";
-import { mpApi, type MediaSecurityStatus } from "../../services/api";
+import { VoiceInput } from "../../components/VoiceInput";
+import {
+  mpApi,
+  type ArtStyleName,
+  type ArtStyleOption,
+  type MediaSecurityStatus,
+  type PhotoEditPreset,
+} from "../../services/api";
 import { ensurePrivacyAuthorized } from "../../services/privacy";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
-const ART_STYLES = [
-  { name: "油画", emoji: "🖼️", description: "厚重笔触，经典质感" },
-  { name: "水彩", emoji: "🎨", description: "柔和通透，清新自然" },
-  { name: "素描", emoji: "✏️", description: "细腻线条，明暗分明" },
-  { name: "水墨画", emoji: "🖌️", description: "东方笔墨，诗意留白" },
-  { name: "印象派", emoji: "🌅", description: "鲜活光影，斑斓色彩" },
-] as const;
-
-type ArtStyle = (typeof ART_STYLES)[number]["name"];
+const PHOTO_PRESETS: PhotoEditPreset[] = ["一键去路人", "清晨阳光", "日落余晖", "通透增强", "人像精修", "背景虚化"];
+type Mode = "landing" | "smart" | "art";
 
 async function readBase64(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -44,18 +44,34 @@ async function guideToSettings(title: string, content: string): Promise<void> {
 }
 
 export default function SilverLensPage() {
+  const [mode, setMode] = useState<Mode>("landing");
   const [previewPath, setPreviewPath] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceFileKey, setSourceFileKey] = useState("");
   const [resultUrl, setResultUrl] = useState("");
-  const [selectedStyle, setSelectedStyle] = useState<ArtStyle>("油画");
-  const [choosingStyle, setChoosingStyle] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<PhotoEditPreset>("通透增强");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [styles, setStyles] = useState<ArtStyleOption[]>([]);
+  const [selectedStyle, setSelectedStyle] = useState<ArtStyleName>("油画");
   const [busyMessage, setBusyMessage] = useState("");
   const [securityStatus, setSecurityStatus] = useState<MediaSecurityStatus>();
   const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
-
   const busy = Boolean(busyMessage);
+
+  useEffect(() => {
+    let active = true;
+    void mpApi.silverLensStyles()
+      .then(({ styles: serverStyles }) => {
+        if (!active) return;
+        setStyles(serverStyles);
+        if (serverStyles[0]) setSelectedStyle(serverStyles[0].name);
+      })
+      .catch((error) => {
+        if (active) showMpError(error, async () => { await Taro.redirectTo({ url: "/pages/silver-lens/index" }); });
+      });
+    return () => { active = false; };
+  }, []);
 
   async function chooseImage(sourceType: "camera" | "album") {
     if (busy) return;
@@ -65,7 +81,7 @@ export default function SilverLensPage() {
         count: 1,
         mediaType: ["image"],
         sourceType: [sourceType],
-        sizeType: ["compressed", "original"],
+        sizeType: ["original", "compressed"],
       });
       const file = result.tempFiles[0];
       if (!file) return;
@@ -91,23 +107,38 @@ export default function SilverLensPage() {
     }
   }
 
-  async function processImage(
-    mode: "restore" | "transform",
-    operationId = createOperationId(`silver-${mode}`),
+  async function processSmart(
+    operationId = createOperationId("silver-restore"),
+    requestData = { sourceFileKey, preset: selectedPreset, prompt: customPrompt.trim() || undefined },
+  ) {
+    if (!sourceUrl || !requestData.sourceFileKey || busy || operationLockRef.current) return;
+    operationLockRef.current = true;
+    setBusyMessage("正在精细处理，约需半分钟");
+    try {
+      const result = await mpApi.restorePhoto(requestData, operationId);
+      setResultUrl(result.imageUrl);
+      setSecurityStatus(result.securityStatus);
+    } catch (error) {
+      showMpError(error, () => processSmart(operationId, requestData));
+    } finally {
+      operationLockRef.current = false;
+      setBusyMessage("");
+    }
+  }
+
+  async function processArt(
+    operationId = createOperationId("silver-transform"),
     requestData = { sourceFileKey, style: selectedStyle },
   ) {
     if (!sourceUrl || !requestData.sourceFileKey || busy || operationLockRef.current) return;
     operationLockRef.current = true;
-    setBusyMessage(mode === "restore" ? "正在修复，约需半分钟" : "正在创作艺术照，约需半分钟");
+    setBusyMessage("正在创作艺术作品，约需半分钟");
     try {
-      const result = mode === "restore"
-        ? await mpApi.restorePhoto({ sourceFileKey: requestData.sourceFileKey }, operationId)
-        : await mpApi.transformPhoto({ sourceFileKey: requestData.sourceFileKey, style: requestData.style }, operationId);
+      const result = await mpApi.transformPhoto(requestData, operationId);
       setResultUrl(result.imageUrl);
       setSecurityStatus(result.securityStatus);
-      setChoosingStyle(false);
     } catch (error) {
-      showMpError(error, () => processImage(mode, operationId, requestData));
+      showMpError(error, () => processArt(operationId, requestData));
     } finally {
       operationLockRef.current = false;
       setBusyMessage("");
@@ -137,27 +168,47 @@ export default function SilverLensPage() {
     }
   }
 
-  function reset() {
+  function resetPhoto() {
     setPreviewPath("");
     setSourceUrl("");
+    setSourceFileKey("");
     setResultUrl("");
-    setChoosingStyle(false);
+    setCustomPrompt("");
+    setSelectedPreset("通透增强");
     setSecurityStatus(undefined);
     dismissError();
   }
 
+  function returnToLanding() {
+    resetPhoto();
+    setMode("landing");
+  }
+
+  const pageTitle = mode === "smart" ? "智能修图" : mode === "art" ? "艺术画室" : "老摄影大师";
+
   return (
     <View className={`silver-page ${resultUrl ? "silver-page--result" : ""}`}>
-      <PageHeader title="老摄影大师" />
+      <PageHeader title={pageTitle} onBack={mode === "landing" ? undefined : returnToLanding} />
       {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
-      {!previewPath ? (
-        <View className="silver-entry">
-          <View className="silver-entry__hero">
-            <Text className="silver-entry__emoji">📸</Text>
-            <Text className="silver-entry__title">让珍贵照片焕然一新</Text>
-            <Text className="silver-entry__subtitle">拍一张或从相册选择，操作简单又清楚</Text>
+
+      {mode === "landing" ? (
+        <View className="mode-landing">
+          <View className="mode-card mode-card--smart clickable" onClick={() => setMode("smart")}>
+            <Text className="mode-card__icon">✨</Text>
+            <Text className="mode-card__title">智能修图 & 美化</Text>
+            <Text className="mode-card__description">一键去除路人、调节光影、让照片更清晰</Text>
           </View>
-          <View className="silver-entry__actions">
+          <View className="mode-card mode-card--art clickable" onClick={() => setMode("art")}>
+            <Text className="mode-card__icon">🎨</Text>
+            <Text className="mode-card__title">艺术画室</Text>
+            <Text className="mode-card__description">照片变油画、水墨画等艺术作品</Text>
+          </View>
+        </View>
+      ) : !previewPath ? (
+        <View className="source-picker">
+          <Text className="silver-section__title">先选择一张照片</Text>
+          <Text className="source-picker__tip">建议使用清晰原图，处理后会保持原来的画面比例</Text>
+          <View className="source-picker__actions">
             <View className="source-card clickable" onClick={() => void chooseImage("camera")}>
               <Text className="source-card__icon">📷</Text>
               <Text className="source-card__title">拍照</Text>
@@ -169,7 +220,7 @@ export default function SilverLensPage() {
               <Text className="source-card__tip">选择已有照片</Text>
             </View>
           </View>
-          <Text className="silver-entry__privacy">照片仅用于本次处理，请放心使用</Text>
+          <Text className="silver-privacy">照片仅用于本次处理，请放心使用</Text>
         </View>
       ) : resultUrl ? (
         <View className="silver-result">
@@ -188,42 +239,68 @@ export default function SilverLensPage() {
           <Button block size="xlarge" type="primary" onClick={() => void saveResult()}>保存到相册</Button>
           <View className="result-actions">
             <View className="result-actions__secondary clickable" onClick={() => setResultUrl("")}><Text>重新处理</Text></View>
-            <View className="result-actions__secondary clickable" onClick={reset}><Text>再来一张</Text></View>
+            <View className="result-actions__secondary clickable" onClick={resetPhoto}><Text>再来一张</Text></View>
           </View>
         </View>
       ) : (
-        <View className="silver-preview">
-          <Text className="silver-section__title">这张照片想怎么处理？</Text>
-          <Image className="silver-preview__image" src={previewPath} mode="aspectFit" onClick={() => Taro.previewImage({ current: previewPath, urls: [previewPath] })} />
-          {!choosingStyle ? (
-            <View className="process-actions">
-              <View className="process-card clickable" onClick={() => void processImage("restore")}>
-                <Text className="process-card__icon">✨</Text>
-                <View><Text className="process-card__title">一键修复</Text><Text className="process-card__tip">提高清晰度、修复划痕与褪色</Text></View>
+        <View className="workbench">
+          <Image className="workbench__image" src={previewPath} mode="aspectFit" onClick={() => Taro.previewImage({ current: previewPath, urls: [previewPath] })} />
+
+          {mode === "smart" ? (
+            <View className="smart-panel">
+              <View className="panel-heading">
+                <Text className="panel-heading__title">🪄 选择修图魔法</Text>
+                <Text className="panel-heading__cost">2积分/次</Text>
               </View>
-              <View className="process-card clickable" onClick={() => setChoosingStyle(true)}>
-                <Text className="process-card__icon">🎨</Text>
-                <View><Text className="process-card__title">变艺术照</Text><Text className="process-card__tip">选择喜欢的画作风格</Text></View>
+              <Text className="panel-heading__tip">已默认选中通透增强，可换成其他效果</Text>
+              <View className="preset-grid">
+                {PHOTO_PRESETS.map((preset) => (
+                  <View
+                    key={preset}
+                    className={`preset-button clickable ${selectedPreset === preset ? "preset-button--selected" : ""}`}
+                    onClick={() => setSelectedPreset(preset)}
+                  >
+                    <Text>{preset}</Text>
+                  </View>
+                ))}
               </View>
+              <View className="custom-edit">
+                <Text className="custom-edit__label">我想怎么修：</Text>
+                <Textarea
+                  className="custom-edit__textarea"
+                  value={customPrompt}
+                  maxlength={200}
+                  placeholder="例如：把天空变蓝，照片调亮点"
+                  onInput={(event) => setCustomPrompt(event.detail.value)}
+                />
+                <VoiceInput onResult={(text) => setCustomPrompt((current) => `${current}${current ? "，" : ""}${text}`)} />
+              </View>
+              <Button block size="xlarge" type="primary" onClick={() => void processSmart()}>🚀 开始处理</Button>
             </View>
           ) : (
             <View className="style-panel">
-              <Text className="style-panel__title">选一种喜欢的风格</Text>
-              {ART_STYLES.map((style) => (
+              <View className="panel-heading">
+                <Text className="panel-heading__title">🎨 选择艺术风格</Text>
+                <Text className="panel-heading__cost">2积分/次</Text>
+              </View>
+              {styles.map((style) => (
                 <View
                   key={style.name}
                   className={`style-card clickable ${selectedStyle === style.name ? "style-card--selected" : ""}`}
                   onClick={() => setSelectedStyle(style.name)}
                 >
                   <Text className="style-card__emoji">{style.emoji}</Text>
-                  <View className="style-card__copy"><Text className="style-card__name">{style.name}</Text><Text className="style-card__description">{style.description}</Text></View>
+                  <View className="style-card__copy">
+                    <Text className="style-card__name">{style.name}</Text>
+                    <Text className="style-card__description">{style.description}</Text>
+                  </View>
                   <Text className="style-card__mark">{selectedStyle === style.name ? "✓" : "›"}</Text>
                 </View>
               ))}
-              <Button block size="xlarge" type="primary" onClick={() => void processImage("transform")}>生成{selectedStyle}艺术照</Button>
+              <Button block size="xlarge" type="primary" disabled={!styles.length} onClick={() => void processArt()}>生成{selectedStyle}艺术作品</Button>
             </View>
           )}
-          <View className="change-photo clickable" onClick={reset}><Text>换一张照片</Text></View>
+          <View className="change-photo clickable" onClick={resetPhoto}><Text>换一张照片</Text></View>
         </View>
       )}
 

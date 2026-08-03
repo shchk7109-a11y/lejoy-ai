@@ -39,6 +39,10 @@ export type CreditTransaction = {
 
 type ApiError = { code?: string; message?: string; error?: { code?: string; message?: string } };
 export type MediaSecurityStatus = "bypassed" | "pending";
+export type PhotoEditPreset = "一键去路人" | "清晨阳光" | "日落余晖" | "通透增强" | "人像精修" | "背景虚化";
+// 风格清单由服务端 server/silverlens.ts 下发并校验；小程序不再复制维护枚举。
+export type ArtStyleName = string;
+export type ArtStyleOption = { name: ArtStyleName; emoji: string; description: string };
 export type StoryTopic = { title: string; description: string; protagonist: string };
 export type StoryPage = { pageNumber: number; text: string; imagePrompt: string; imageUrl?: string; audioUrl?: string };
 export type LifeResult = {
@@ -112,9 +116,10 @@ export const mpApi = {
     request<{ url: string; fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/upload/image", { method: "POST", data, retry: "never" }),
   uploadAudio: (data: { base64: string; mimeType: "audio/mpeg" }) =>
     request<{ url: string; fileKey: string }>("/api/mp/upload/audio", { method: "POST", data, retry: "never" }),
-  restorePhoto: (data: { sourceFileKey: string; prompt?: string }, operationId?: string) =>
+  silverLensStyles: () => request<{ styles: ArtStyleOption[] }>("/api/mp/silverlens/styles"),
+  restorePhoto: (data: { sourceFileKey: string; preset?: PhotoEditPreset; prompt?: string }, operationId?: string) =>
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/restore", { method: "POST", data, retry: "never", operationId }),
-  transformPhoto: (data: { sourceFileKey: string; style: "油画" | "水彩" | "素描" | "水墨画" | "印象派" }, operationId?: string) =>
+  transformPhoto: (data: { sourceFileKey: string; style: ArtStyleName }, operationId?: string) =>
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data, retry: "never", operationId }),
   transcribeAudio: (fileKey: string) =>
     request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { fileKey, language: "zh" }, retry: "never" }),

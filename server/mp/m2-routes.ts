@@ -4,7 +4,15 @@ import type { InsertMediaCheckTask, MediaCheckTask } from "../../drizzle/schema"
 import { aiASR, aiEditImage } from "../ai/gateway";
 import { ENV } from "../_core/env";
 import { withCreditCharge } from "../credits-charge";
-import { ART_STYLES, buildRestorePrompt, getArtStylePrompt, type ArtStyle } from "../silverlens";
+import {
+  ART_STYLES,
+  PHOTO_EDIT_PRESETS,
+  buildRestorePrompt,
+  getArtStyleOptions,
+  getArtStylePrompt,
+  type ArtStyle,
+  type PhotoEditPreset,
+} from "../silverlens";
 import { storageDelete, storageGet, storagePut } from "../storage";
 import { createMediaCheckTask, findMediaCheckTask, findMediaCheckTaskByFile, updateMediaCheckTaskStatus } from "./media-check-tasks";
 import { checkMediaSecurity, type MediaSecuritySubmission } from "./security";
@@ -206,6 +214,10 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
 
   router.use(authenticate);
 
+  router.get("/silverlens/styles", (_req, res) => {
+    res.json({ styles: getArtStyleOptions() });
+  });
+
   router.post("/upload/image", asyncRoute(async (req, res) => {
     let decoded: ReturnType<typeof decodeImage>;
     try {
@@ -246,12 +258,18 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
       return;
     }
     const prompt = typeof req.body?.prompt === "string" ? req.body.prompt : undefined;
+    const requestedPreset = req.body?.preset;
+    if (requestedPreset !== undefined && (typeof requestedPreset !== "string" || !(requestedPreset in PHOTO_EDIT_PRESETS))) {
+      badRequest(res, "请选择有效的修图魔法");
+      return;
+    }
+    const preset = (requestedPreset as PhotoEditPreset | undefined) ?? "通透增强";
     const charged = await deps.withCreditCharge(
       user.id,
       2,
       "photo_restore",
       async () => {
-        const base64 = await deps.aiEditImage({ imageUrl: source.url, prompt: buildRestorePrompt(prompt) });
+        const base64 = await deps.aiEditImage({ imageUrl: source.url, prompt: buildRestorePrompt(prompt, preset) });
         const file = await deps.storagePut(`results/${user.id}/${deps.createFileId()}.png`, Buffer.from(base64, "base64"), "image/png");
         const securityStatus = await submitStoredImage(file, user);
         return { file, securityStatus };

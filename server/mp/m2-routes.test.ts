@@ -176,14 +176,14 @@ describe("M2 小程序 REST 接口", () => {
     expect(deps.storageDelete).toHaveBeenCalledWith("uploads/7/fixed-id.jpg");
   });
 
-  it("照片修复先扣 2 积分、使用共享提示词并送检生成图", async () => {
+  it("照片修复先扣 2 积分、叠加预设与自由描述并送检生成图", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);
 
     const response = await fetch(`${baseUrl}/silverlens/restore`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sourceFileKey: "uploads/7/source.jpg" }),
+      body: JSON.stringify({ sourceFileKey: "uploads/7/source.jpg", preset: "清晨阳光", prompt: "天空更蓝" }),
     });
 
     expect(response.status).toBe(200);
@@ -191,7 +191,29 @@ describe("M2 小程序 REST 接口", () => {
     expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 2, "photo_restore", expect.any(Function), "照片修复");
     expect(deps.aiEditImage).toHaveBeenCalledWith(expect.objectContaining({
       imageUrl: "https://cdn.example/uploads/7/source.jpg",
-      prompt: expect.stringContaining("人物面部保持原有特征不变"),
+      prompt: expect.stringMatching(/清晨阳光[\s\S]*天空更蓝[\s\S]*严格保持人物五官/),
+    }));
+  });
+
+  it("向小程序下发服务端艺术风格清单并接受新增动漫风", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+
+    const stylesResponse = await fetch(`${baseUrl}/silverlens/styles`);
+    expect(stylesResponse.status).toBe(200);
+    const styles = await stylesResponse.json() as { styles: Array<{ name: string }> };
+    expect(styles.styles.map(({ name }) => name)).toEqual([
+      "油画", "水彩", "素描", "水墨画", "三维动画风", "日式动漫风", "童话卡通风",
+    ]);
+
+    const transformResponse = await fetch(`${baseUrl}/silverlens/transform`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sourceFileKey: "uploads/7/source.jpg", style: "三维动画风" }),
+    });
+    expect(transformResponse.status).toBe(200);
+    expect(deps.aiEditImage).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining("高品质三维动画风格"),
     }));
   });
 
@@ -223,7 +245,7 @@ describe("M2 小程序 REST 接口", () => {
     expect(deps.withCreditCharge).not.toHaveBeenCalled();
   });
 
-  it("艺术转换只接受五种风格，语音转写只使用当前用户上传文件且不扣积分", async () => {
+  it("艺术转换只接受服务端七种风格，语音转写只使用当前用户上传文件且不扣积分", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);
 

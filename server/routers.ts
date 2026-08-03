@@ -15,7 +15,15 @@ import { aiChat, aiChatMulti, aiEditImage, aiGenerateImage, aiTTS, aiASR } from 
 import { storagePut } from "./storage";
 import { ENV } from "./_core/env";
 import { copywriterInputSchema, generateCopywriterWishes } from "./copywriter";
-import { ART_STYLES, buildRestorePrompt, getArtStylePrompt, type ArtStyle } from "./silverlens";
+import {
+  ART_STYLES,
+  PHOTO_EDIT_PRESETS,
+  buildRestorePrompt,
+  getArtStyleOptions,
+  getArtStylePrompt,
+  type ArtStyle,
+  type PhotoEditPreset,
+} from "./silverlens";
 
 // ─── 管理员权限中间件 ──────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -126,10 +134,16 @@ export const appRouter = router({
   }),
 
   silverLens: router({
+    styles: protectedProcedure.query(() => getArtStyleOptions()),
+
     restorePhoto: protectedProcedure
-      .input(z.object({ imageUrl: z.string(), prompt: z.string().optional() }))
+      .input(z.object({
+        imageUrl: z.string(),
+        prompt: z.string().optional(),
+        preset: z.enum(Object.keys(PHOTO_EDIT_PRESETS) as [PhotoEditPreset, ...PhotoEditPreset[]]).optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
-        const promptText = buildRestorePrompt(input.prompt);
+        const promptText = buildRestorePrompt(input.prompt, input.preset);
         const { value: imageUrl, credits } = await withCreditCharge(
           ctx.user.id,
           CREDIT_COSTS.photo_restore,
