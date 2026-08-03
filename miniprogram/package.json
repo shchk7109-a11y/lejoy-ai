@@ -5,6 +5,7 @@
   "scripts": {
     "dev:weapp": "taro build --type weapp --watch",
     "build:weapp": "taro build --type weapp",
+    "build:weapp:prod": "TARO_APP_API_BASE_URL=https://api.hxzhineng.xyz taro build --type weapp && node scripts/verify-production-build.mjs",
     "check": "tsc --noEmit"
   },
   "dependencies": {
