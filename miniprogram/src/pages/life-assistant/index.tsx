@@ -4,6 +4,7 @@ import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { ErrorState, useMpError } from "../../components/ErrorState";
+import { GenerationProgress } from "../../components/GenerationProgress";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import { mpApi, type LifeResult } from "../../services/api";
@@ -171,7 +172,11 @@ export default function LifeAssistantPage() {
           </View>
         ) : null}
       </View>
-      {busyMessage ? <View className="life-loading"><View className="life-loading__spinner" /><Text>{busyMessage}</Text><Text className="life-loading__tip">请不要重复点击</Text></View> : null}
+      <GenerationProgress
+        active={Boolean(busyMessage)}
+        label={busyMessage || "正在查询生活助手"}
+        estimate={busyMessage.includes("准备图片") ? "约需十几秒" : "约需半分钟"}
+      />
     </View>
   );
 }

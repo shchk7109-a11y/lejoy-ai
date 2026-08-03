@@ -23,7 +23,3 @@
 .life-section--advice { background: #f0fdf4; }
 .life-section__title { display: block; margin-bottom: 18rpx; color: #166534; font-size: $font-title; font-weight: 800; }
 .life-point { display: block; margin-top: 12rpx; font-size: $font-body; line-height: 1.65; }
-.life-loading { position: fixed; inset: 0; z-index: 20; padding: 60rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28rpx; background: rgba(250, 249, 245, .95); color: #14532d; font-size: $font-title; font-weight: 800; text-align: center; }
-.life-loading__spinner { width: 100rpx; height: 100rpx; border: 12rpx solid #bbf7d0; border-top-color: #16a34a; border-radius: 50%; animation: life-spin 1s linear infinite; }
-.life-loading__tip { color: #52705d; font-size: $font-secondary; font-weight: 500; }
-@keyframes life-spin { to { transform: rotate(360deg); } }

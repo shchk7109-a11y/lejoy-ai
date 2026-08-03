@@ -8,6 +8,20 @@ import { aiChat, aiGenerateImage } from "./ai/gateway";
 
 export { invokeMiniMaxText, invokeMiniMaxImage, invokeMiniMaxTTS } from "./ai/minimaxClient";
 
+const STORY_STYLE_GUIDANCE: Record<string, string> = {
+  "温馨治愈": "亲情陪伴、分享互助、温暖安心",
+  "科幻探险": "未来科技、星际探索、科学想象",
+  "卡通童话": "拟人伙伴、明亮童趣、奇妙童话世界",
+  "睡前故事": "节奏舒缓、氛围安心、结尾温柔",
+  "成语故事": "中国传统智慧、浅显寓意、适合儿童理解",
+  "超级英雄": "正义英雄团队、守护家园、勇气与责任",
+};
+
+function describeStoryStyle(theme: string): string {
+  const guidance = STORY_STYLE_GUIDANCE[theme];
+  return guidance ? `${theme}（${guidance}）` : theme;
+}
+
 /**
  * 解析模型返回的 JSON 内容（去除 think 标签与 markdown 代码块）
  */
@@ -19,12 +33,9 @@ function parseModelJson<T>(raw: string): T {
   return JSON.parse(jsonMatch[0]) as T;
 }
 
-function parseModelJsonArray<T>(raw: string): T {
-  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-  cleaned = cleaned.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  const arrMatch = cleaned.match(/\[[\s\S]*\]/);
-  if (!arrMatch) throw new Error("未找到JSON数组内容");
-  return JSON.parse(arrMatch[0]) as T;
+function logJsonParseFailure(task: string, error: unknown): void {
+  const errorType = error instanceof Error ? error.name : "UnknownError";
+  console.error(`[AI] ${task} JSON解析失败`, { errorType });
 }
 
 export function buildStoryImagePrompt(imagePrompt: string, pageNumber: number): string {
@@ -40,7 +51,7 @@ export async function generateStoryText(params: {
   topic: string;
   character: string;
 }): Promise<{ title: string; pages: Array<{ pageNumber: number; text: string; imagePrompt: string }> }> {
-  const prompt = `你是儿童故事大师。请为${params.age}岁的孩子创作一个「${params.theme}」风格的故事，主角叫${params.character}，故事主题：${params.topic}。要求：共4页，每页120-150字中文，语言生动有趣，富有想象力，每页有清晰的情节推进，结尾积极向上。返回JSON：{"title":"故事标题","pages":[{"pageNumber":1,"text":"中文故事内容","imagePrompt":"Detailed English description for children book illustration, warm colorful style"}]}`;
+  const prompt = `你是儿童故事大师。请为${params.age}岁的孩子创作一个「${describeStoryStyle(params.theme)}」风格的故事，主角叫${params.character}，故事主题：${params.topic}。要求：共4页，每页120-150字中文，语言生动有趣，富有想象力，每页有清晰的情节推进，结尾积极向上。返回JSON：{"title":"故事标题","pages":[{"pageNumber":1,"text":"中文故事内容","imagePrompt":"Detailed English description for children book illustration, warm colorful style"}]}`;
   const raw = await aiChat({
     systemPrompt: "你是儿童故事创作专家，只返回JSON格式内容，不要有任何多余的文字。",
     userPrompt: prompt,
@@ -60,13 +71,23 @@ export async function suggestStoryTopics(params: {
   const protagonistHint = params.customProtagonist
     ? `，主角必须是「${params.customProtagonist}」（可以是超级英雄、动漫角色等，保持其原有特征但适合儿童）`
     : ``;
-  const prompt = `你是儿童故事创作专家。请为${params.character}推荐4个「${params.theme}」风格的故事题材${protagonistHint}。每个题材要有趣、有教育意义、适合孩子。返回JSON数组，每项包含：title（题材标题，10字内）、description（题材简介，30字内）、protagonist（主角名字${params.customProtagonist ? `，固定为「${params.customProtagonist}」` : `，如小明、小花、阿宝等随机有趣的名字`}）。格式：[{"title":"...","description":"...","protagonist":"..."}]`;
+  const prompt = `你是儿童故事创作专家。请为${params.character}推荐4个「${describeStoryStyle(params.theme)}」风格的故事题材${protagonistHint}。每个题材要有趣、有教育意义、适合孩子。返回JSON对象，topics 必须是包含4项的数组，每项包含：title（题材标题，10字内）、description（题材简介，30字内）、protagonist（主角名字${params.customProtagonist ? `，固定为「${params.customProtagonist}」` : `，如小明、小花、阿宝等随机有趣的名字`}）。格式：{"topics":[{"title":"...","description":"...","protagonist":"..."}]}`;
   const raw = await aiChat({
     systemPrompt: "你是儿童故事创作专家，只返回JSON格式内容，不要有任何多余的文字。",
     userPrompt: prompt,
     json: true,
   });
-  return parseModelJsonArray(raw);
+  const parsed = parseModelJson<{ topics?: unknown }>(raw);
+  if (!Array.isArray(parsed.topics)) throw new Error("AI 未返回有效题材列表");
+  const topics = parsed.topics.filter((topic): topic is { title: string; description: string; protagonist: string } => (
+    typeof topic === "object"
+    && topic !== null
+    && typeof (topic as Record<string, unknown>).title === "string"
+    && typeof (topic as Record<string, unknown>).description === "string"
+    && typeof (topic as Record<string, unknown>).protagonist === "string"
+  ));
+  if (topics.length < 4) throw new Error("AI 未返回四个有效题材");
+  return topics.slice(0, 4);
 }
 
 /**
@@ -108,8 +129,8 @@ export async function analyzeFoodNutrition(foodName: string): Promise<{
   const raw = await aiChat({ systemPrompt, userPrompt, json: true });
   try {
     return parseModelJson(raw);
-  } catch (e) {
-    console.error("[AI] 营养分析JSON解析失败，原始内容:", raw.substring(0, 500));
+  } catch (error) {
+    logJsonParseFailure("营养分析", error);
     throw new Error("营养分析结果解析失败，请重试");
   }
 }
@@ -151,8 +172,8 @@ export async function identifyPlant(params: {
   const raw = await aiChat({ systemPrompt, userPrompt, imageUrl: params.imageUrl, json: true });
   try {
     return parseModelJson(raw);
-  } catch (e) {
-    console.error("[AI] 植物识别JSON解析失败，原始内容:", raw.substring(0, 500));
+  } catch (error) {
+    logJsonParseFailure("植物识别", error);
     throw new Error("植物识别结果解析失败，请重试");
   }
 }
@@ -201,8 +222,8 @@ export async function queryHealthInfo(params: {
   const raw = await aiChat({ systemPrompt, userPrompt, imageUrl: params.imageUrl, json: true });
   try {
     return parseModelJson(raw);
-  } catch (e) {
-    console.error("[AI] 健康百科JSON解析失败，原始内容:", raw.substring(0, 500));
+  } catch (error) {
+    logJsonParseFailure("健康百科", error);
     throw new Error("健康信息解析失败，请重试");
   }
 }

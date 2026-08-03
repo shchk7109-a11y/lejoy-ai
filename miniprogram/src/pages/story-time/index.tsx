@@ -1,23 +1,21 @@
-import { useRef, useState } from "react";
-import { Image, Input, Text, View } from "@tarojs/components";
+import { useEffect, useRef, useState } from "react";
+import { Image, Input, Text, Textarea, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { ErrorState, useMpError } from "../../components/ErrorState";
+import { GenerationProgress } from "../../components/GenerationProgress";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
+import {
+  createCustomStoryTopic,
+  remainingTopicRefreshSeconds,
+  STORY_THEMES,
+  TOPIC_REFRESH_COOLDOWN_MS,
+} from "../../features/story-time/flow";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
-
-const STORY_THEMES = [
-  { name: "勇气成长", emoji: "🌱", tip: "学会勇敢和坚持" },
-  { name: "奇幻冒险", emoji: "🏰", tip: "走进神奇的想象世界" },
-  { name: "传统美德", emoji: "🏮", tip: "懂得善良、诚信与感恩" },
-  { name: "科学探索", emoji: "🔭", tip: "发现自然和宇宙的奥秘" },
-  { name: "动物朋友", emoji: "🐼", tip: "和可爱动物成为朋友" },
-  { name: "睡前童话", emoji: "🌙", tip: "温柔安心地进入梦乡" },
-] as const;
 
 const STORY_VOICES = [
   { id: "lively", name: "活泼童声", emoji: "🧒" },
@@ -44,6 +42,9 @@ export default function StoryTimePage() {
   const [childName, setChildName] = useState("");
   const [age, setAge] = useState("6");
   const [topics, setTopics] = useState<StoryTopic[]>([]);
+  const [customTopic, setCustomTopic] = useState("");
+  const [topicRefreshReadyAt, setTopicRefreshReadyAt] = useState(0);
+  const [topicRefreshRemaining, setTopicRefreshRemaining] = useState(0);
   const [title, setTitle] = useState("");
   const [pages, setPages] = useState<StoryPage[]>([]);
   const [voiceType, setVoiceType] = useState("lively");
@@ -56,6 +57,25 @@ export default function StoryTimePage() {
   const pagesRef = useRef<StoryPage[]>([]);
   const speechGeneratingRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
+
+  useEffect(() => {
+    if (!topicRefreshReadyAt) {
+      setTopicRefreshRemaining(0);
+      return undefined;
+    }
+    const updateRemaining = () => {
+      const remaining = remainingTopicRefreshSeconds(Date.now(), topicRefreshReadyAt);
+      setTopicRefreshRemaining(remaining);
+      if (remaining === 0) setTopicRefreshReadyAt(0);
+    };
+    updateRemaining();
+    const timer = setInterval(updateRemaining, 1000);
+    return () => clearInterval(timer);
+  }, [topicRefreshReadyAt]);
+
+  useEffect(() => () => {
+    audioRef.current?.destroy();
+  }, []);
 
   function replacePages(nextPages: StoryPage[]): void {
     pagesRef.current = nextPages;
@@ -76,6 +96,7 @@ export default function StoryTimePage() {
   async function loadTopics(operationId = createOperationId("story-topics")) {
     if (!theme || busyMessage || operationLockRef.current) return;
     operationLockRef.current = true;
+    setTopicRefreshReadyAt(Date.now() + TOPIC_REFRESH_COOLDOWN_MS);
     setBusyMessage("正在为孩子想故事题材…");
     try {
       const result = await mpApi.suggestStoryTopics({
@@ -91,6 +112,24 @@ export default function StoryTimePage() {
       operationLockRef.current = false;
       setBusyMessage("");
     }
+  }
+
+  async function refreshTopics() {
+    const remaining = remainingTopicRefreshSeconds(Date.now(), topicRefreshReadyAt);
+    if (remaining > 0) {
+      await Taro.showToast({ title: `请等 ${remaining} 秒再换一批`, icon: "none", duration: 2500 });
+      return;
+    }
+    await loadTopics();
+  }
+
+  function generateCustomStory() {
+    const topic = createCustomStoryTopic(customTopic, childName);
+    if (!topic) {
+      void Taro.showToast({ title: "请先说说想听的主题", icon: "none", duration: 2500 });
+      return;
+    }
+    void generateStory(topic);
   }
 
   async function generateStory(topic: StoryTopic, operationId = createOperationId("story-structure")) {
@@ -220,6 +259,9 @@ export default function StoryTimePage() {
     setStep("theme");
     setTheme("");
     setTopics([]);
+    setCustomTopic("");
+    setTopicRefreshReadyAt(0);
+    setTopicRefreshRemaining(0);
     setTitle("");
     replacePages([]);
     setIllustrating(false);
@@ -275,6 +317,41 @@ export default function StoryTimePage() {
                 </View>
               ))}
             </View>
+            <Button
+              block
+              size="xlarge"
+              type="primary"
+              fill="outline"
+              disabled={topicRefreshRemaining > 0 || Boolean(busyMessage)}
+              onClick={() => void refreshTopics()}
+            >
+              {topicRefreshRemaining > 0 ? `${topicRefreshRemaining} 秒后可换一批` : "换一批灵感"}
+            </Button>
+            <View className="custom-topic">
+              <Text className="custom-topic__title">我来说主题</Text>
+              <Text className="custom-topic__tip">也可以不选上面的卡片，直接说您想听什么</Text>
+              <Textarea
+                className="custom-topic__input"
+                value={customTopic}
+                maxlength={100}
+                placeholder="例如：学会分享，或者一次去动物园的冒险…"
+                onInput={(event) => setCustomTopic(event.detail.value)}
+              />
+              <VoiceInput
+                onResult={(text) => setCustomTopic((current) => (
+                  [current.trim(), text.trim()].filter(Boolean).join("，").slice(0, 100)
+                ))}
+              />
+              <Button
+                block
+                size="xlarge"
+                type="primary"
+                disabled={!customTopic.trim()}
+                onClick={generateCustomStory}
+              >
+                用这个主题讲故事
+              </Button>
+            </View>
           </View>
         ) : null}
 
@@ -307,7 +384,11 @@ export default function StoryTimePage() {
           </View>
         ) : null}
       </View>
-      {busyMessage ? <View className="story-loading"><View className="story-loading__spinner" /><Text>{busyMessage}</Text><Text className="story-loading__tip">请不要重复点击</Text></View> : null}
+      <GenerationProgress
+        active={Boolean(busyMessage) || illustrating}
+        label={illustrating ? "正在逐页生成故事配图" : busyMessage || "正在生成故事"}
+        estimate={illustrating ? "约需1至2分钟" : busyMessage.includes("朗读") ? "约需1分钟" : "约需半分钟"}
+      />
     </View>
   );
 }

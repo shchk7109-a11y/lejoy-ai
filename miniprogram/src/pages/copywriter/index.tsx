@@ -4,6 +4,7 @@ import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { ErrorState, useMpError } from "../../components/ErrorState";
+import { GenerationProgress } from "../../components/GenerationProgress";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import {
@@ -165,6 +166,7 @@ export default function CopywriterPage() {
         </View>
       )}
       {wishes.length > 0 ? <AigcBadge /> : null}
+      <GenerationProgress active={loading} label="正在生成暖心文案" estimate="约需半分钟" />
     </View>
   );
 }

@@ -4,6 +4,7 @@ import Taro from "@tarojs/taro";
 import { Button } from "@nutui/nutui-react-taro";
 import { AigcBadge } from "../../components/AigcBadge";
 import { ErrorState, useMpError } from "../../components/ErrorState";
+import { GenerationProgress } from "../../components/GenerationProgress";
 import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import {
@@ -113,7 +114,7 @@ export default function SilverLensPage() {
   ) {
     if (!sourceUrl || !requestData.sourceFileKey || busy || operationLockRef.current) return;
     operationLockRef.current = true;
-    setBusyMessage("正在精细处理，约需半分钟");
+    setBusyMessage("正在精细处理照片");
     try {
       const result = await mpApi.restorePhoto(requestData, operationId);
       setResultUrl(result.imageUrl);
@@ -132,7 +133,7 @@ export default function SilverLensPage() {
   ) {
     if (!sourceUrl || !requestData.sourceFileKey || busy || operationLockRef.current) return;
     operationLockRef.current = true;
-    setBusyMessage("正在创作艺术作品，约需半分钟");
+    setBusyMessage("正在创作艺术作品");
     try {
       const result = await mpApi.transformPhoto(requestData, operationId);
       setResultUrl(result.imageUrl);
@@ -304,13 +305,11 @@ export default function SilverLensPage() {
         </View>
       )}
 
-      {busy ? (
-        <View className="processing-mask">
-          <View className="processing-mask__spinner" />
-          <Text className="processing-mask__title">{busyMessage}</Text>
-          <Text className="processing-mask__tip">请不要退出或重复点击</Text>
-        </View>
-      ) : null}
+      <GenerationProgress
+        active={busy}
+        label={busyMessage || "正在处理照片"}
+        estimate={busyMessage.includes("准备照片") ? "约需十几秒" : "约需半分钟至1分钟"}
+      />
       {resultUrl ? <AigcBadge /> : null}
     </View>
   );
