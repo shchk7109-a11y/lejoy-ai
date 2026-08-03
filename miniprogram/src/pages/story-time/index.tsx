@@ -292,6 +292,10 @@ export default function StoryTimePage() {
       <PageHeader title="AI 故事会" />
       {errorState ? <ErrorState error={errorState.error} onRetry={retryError} onDismiss={dismissError} /> : null}
       <View className="story-content">
+        <View className="story-library-entry clickable" onClick={() => void Taro.navigateTo({ url: "/pages/story-library/index" })}>
+          <Text>📚 我的故事</Text>
+          <Text>最多保存 6 本 ›</Text>
+        </View>
         {step === "theme" ? (
           <View>
             <Text className="story-step">第 1 步，共 3 步</Text>

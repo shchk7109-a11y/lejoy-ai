@@ -2,6 +2,7 @@
 
 .story-page { min-height: 100vh; padding-bottom: 140rpx; background: $color-page; }
 .story-content { padding: 40rpx $page-padding; }
+.story-library-entry { min-height: 108rpx; margin-bottom: 30rpx; padding: 20rpx 26rpx; display: flex; align-items: center; justify-content: space-between; border: 3rpx solid $color-border; border-radius: 30rpx; background: $color-surface; color: $color-primary-strong; font-size: $font-body; font-weight: 700; }
 .story-step { display: block; color: #1d4ed8; font-size: $font-secondary; font-weight: 700; }
 .story-title { display: block; margin: 18rpx 0 36rpx; font-size: $font-hero; font-weight: 800; line-height: 1.35; }
 .story-option-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24rpx; }

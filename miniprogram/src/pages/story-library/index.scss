@@ -1,0 +1,16 @@
+@use "../../styles/tokens.scss" as *;
+
+.story-library { min-height: 100vh; padding-bottom: 60rpx; background: $color-page; }
+.story-library__content { padding: 36rpx $page-padding; }
+.story-library__summary { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30rpx; padding: 24rpx 28rpx; border: 3rpx solid $color-border; border-radius: 32rpx; background: $color-primary-soft; color: $color-primary-strong; font-size: $font-body; font-weight: 700; }
+.story-library__empty { padding: 120rpx 32rpx; border: 3rpx dashed $color-border; border-radius: $radius-card; background: $color-surface; color: $color-secondary; font-size: $font-body; line-height: 1.7; text-align: center; }
+.story-library__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24rpx; }
+.story-book { overflow: hidden; border: 3rpx solid $color-border; border-radius: 36rpx; background: $color-surface; box-shadow: $shadow-card; }
+.story-book__cover { width: 100%; height: 260rpx; background: $color-primary-soft; }
+.story-book__body { padding: 22rpx; }
+.story-book__title { display: block; min-height: 100rpx; color: $color-text; font-size: $font-body; font-weight: 700; line-height: 1.45; }
+.story-book__date { display: block; margin-top: 8rpx; color: $color-secondary; font-size: $font-secondary; }
+.story-book__actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12rpx; margin-top: 20rpx; }
+.story-book__action { min-height: 96rpx; display: flex; align-items: center; justify-content: center; border: 3rpx solid $color-border; border-radius: 24rpx; background: $color-surface; color: $color-primary-strong; font-size: 32rpx; font-weight: 700; }
+.story-book__action--play { border-color: $color-primary; background: $color-primary; color: #fff; }
+.story-book__action--delete { color: $color-danger; }

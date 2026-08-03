@@ -40,4 +40,25 @@ describe("试用第七轮故事会本机书架", () => {
     expect(style).toContain("108rpx");
     expect(style).toContain("40rpx");
   });
+
+  it("提供最多六本的本机书架、二次确认删除和播放入口", () => {
+    const libraryPath = file("miniprogram/src/pages/story-library/index.tsx");
+    expect(existsSync(libraryPath)).toBe(true);
+    if (!existsSync(libraryPath)) return;
+    const app = read("miniprogram/src/app.config.ts");
+    const library = read("miniprogram/src/pages/story-library/index.tsx");
+    const story = read("miniprogram/src/pages/story-time/index.tsx");
+    const player = read("miniprogram/src/pages/story-player/index.tsx");
+
+    expect(app).toContain('"pages/story-library/index"');
+    expect(library).toContain("最多保存 6 本");
+    expect(library).toContain("还没有保存故事");
+    expect(library).toContain("播放");
+    expect(library).toContain("删除");
+    expect(library).toContain("Taro.showModal");
+    expect(library).toContain("storyStorage.remove");
+    expect(story).toContain("我的故事");
+    expect(player).toContain("我的故事");
+    expect(player).toContain('Taro.navigateTo({ url: "/pages/story-library/index" })');
+  });
 });

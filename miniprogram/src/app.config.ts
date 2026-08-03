@@ -7,6 +7,7 @@ export default defineAppConfig({
     "pages/silver-lens/index",
     "pages/story-time/index",
     "pages/story-player/index",
+    "pages/story-library/index",
     "pages/life-assistant/index",
     "pages/ai-kaleidoscope/index",
     "pages/copywriter/index",

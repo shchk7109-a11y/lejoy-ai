@@ -64,7 +64,8 @@ export default function StoryPlayerPage() {
     try {
       const result = await storyStorage.saveDraft(story);
       if (result.status === "full") {
-        await Taro.showModal({ title: "书架已满", content: "最多保存 6 本故事，请先删除一本旧故事。", showCancel: false, confirmText: "知道了" });
+        const choice = await Taro.showModal({ title: "书架已满", content: "最多保存 6 本故事，请先删除一本旧故事。", cancelText: "稍后再说", confirmText: "去删除" });
+        if (choice.confirm) await Taro.navigateTo({ url: "/pages/story-library/index" });
         return;
       }
       if (result.story) {
@@ -115,6 +116,7 @@ export default function StoryPlayerPage() {
           <View className="story-player__action story-player__action--primary clickable" onClick={() => void saveStory()}><Text>{saving ? "正在保存…" : "保存故事"}</Text></View>
           <View className="story-player__action clickable" onClick={() => void Taro.showToast({ title: "正在准备四页绘本", icon: "none" })}><Text>下载到相册</Text></View>
         </View>
+        <View className="story-player__action clickable" onClick={() => void Taro.navigateTo({ url: "/pages/story-library/index" })}><Text>📚 我的故事</Text></View>
         <Text className="story-player__status">故事只保存在当前手机，最多保存 6 本</Text>
       </View>
     </View>
