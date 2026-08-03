@@ -1,0 +1,16 @@
+@use "../../styles/tokens.scss" as *;
+
+.story-player { min-height: 100vh; padding-bottom: 56rpx; background: $color-page; }
+.story-player__content { padding: 28rpx $page-padding 48rpx; }
+.story-player__empty { padding: 96rpx 32rpx; color: $color-secondary; font-size: $font-body; line-height: 1.6; text-align: center; }
+.story-player__image-wrap { position: relative; overflow: hidden; border: 4rpx solid $color-border; border-radius: $radius-card; background: $color-surface; box-shadow: $shadow-card; }
+.story-player__image { display: block; width: 100%; height: 680rpx; }
+.story-player__page { position: absolute; top: 24rpx; right: 24rpx; padding: 12rpx 20rpx; border-radius: 999rpx; background: rgba(255, 255, 255, .92); color: $color-text; font-size: $font-secondary; font-weight: 700; }
+.story-player__text { display: block; min-height: 188rpx; margin: 24rpx 0; padding: 28rpx; border-radius: 32rpx; background: $color-surface; color: $color-text; font-size: $font-body; line-height: 1.75; box-shadow: $shadow-card; }
+.story-player__controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); gap: 16rpx; }
+.story-player__control { min-height: 108rpx; padding: 16rpx 8rpx; border: 3rpx solid $color-border; border-radius: 28rpx; background: $color-surface; color: $color-primary-strong; font-size: 40rpx; font-weight: 700; }
+.story-player__control--main { border-color: $color-primary; background: $color-primary; color: #fff; }
+.story-player__actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18rpx; margin-top: 24rpx; }
+.story-player__action { min-height: 108rpx; padding: 16rpx; border: 3rpx solid $color-primary; border-radius: 28rpx; background: $color-surface; color: $color-primary-strong; font-size: 40rpx; font-weight: 700; }
+.story-player__action--primary { background: $color-primary; color: #fff; }
+.story-player__status { display: block; margin-top: 18rpx; color: $color-secondary; font-size: $font-secondary; line-height: 1.5; text-align: center; }

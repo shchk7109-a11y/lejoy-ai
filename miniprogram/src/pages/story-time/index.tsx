@@ -14,6 +14,7 @@ import {
   TOPIC_REFRESH_COOLDOWN_MS,
 } from "../../features/story-time/flow";
 import { runStoryImageQueue, type StoryImagePlan } from "../../features/story-time/image-queue";
+import { createStoryId, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
@@ -46,14 +47,13 @@ export default function StoryTimePage() {
   const [topicRefreshReadyAt, setTopicRefreshReadyAt] = useState(0);
   const [topicRefreshRemaining, setTopicRefreshRemaining] = useState(0);
   const [title, setTitle] = useState("");
+  const [storyId, setStoryId] = useState("");
   const [pages, setPages] = useState<StoryPage[]>([]);
   const [voiceType, setVoiceType] = useState("lively");
   const [busyMessage, setBusyMessage] = useState("");
   const [illustrating, setIllustrating] = useState(false);
   const [activeImagePage, setActiveImagePage] = useState<number>();
   const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
-  const [playingPage, setPlayingPage] = useState<number>();
-  const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
   const operationLockRef = useRef(false);
   const pagesRef = useRef<StoryPage[]>([]);
   const speechGeneratingRef = useRef(false);
@@ -75,10 +75,6 @@ export default function StoryTimePage() {
     const timer = setInterval(updateRemaining, 1000);
     return () => clearInterval(timer);
   }, [topicRefreshReadyAt]);
-
-  useEffect(() => () => {
-    audioRef.current?.destroy();
-  }, []);
 
   function replacePages(nextPages: StoryPage[]): void {
     pagesRef.current = nextPages;
@@ -156,6 +152,7 @@ export default function StoryTimePage() {
         protagonist: topic.protagonist,
       }, operationId);
       setTitle(story.title);
+      setStoryId(createStoryId());
       replacePages(story.pages);
       setStep("result");
       setBusyMessage("");
@@ -186,7 +183,7 @@ export default function StoryTimePage() {
         isFirstPage: page.pageNumber === 1,
         title: page.pageNumber === 1 ? title : undefined,
       }));
-    if (!plans.length) playSequence(pagesRef.current, 0);
+    if (!plans.length) openStoryPlayer();
     else await generateStorySpeeches(plans);
   }
 
@@ -207,37 +204,31 @@ export default function StoryTimePage() {
             isFirstPage: plan.isFirstPage,
             title: plan.title,
           }, plan.operationId);
-          savePagePatch(page.pageNumber, { audioUrl: speech.audioUrl });
+          savePagePatch(page.pageNumber, { audioUrl: speech.audioUrl, audioFileKey: speech.fileKey });
         } catch (error) {
           const remainingPlans = plans.slice(index);
           showMpError(error, () => generateStorySpeeches(remainingPlans));
           return;
         }
       }
-      playSequence(pagesRef.current, 0);
+      openStoryPlayer();
     } finally {
       speechGeneratingRef.current = false;
       setBusyMessage("");
     }
   }
 
-  function playSequence(readyPages: StoryPage[], index: number) {
-    const page = readyPages[index];
-    if (!page?.audioUrl) {
-      setPlayingPage(undefined);
-      return;
-    }
-    audioRef.current?.destroy();
-    const audio = Taro.createInnerAudioContext();
-    audioRef.current = audio;
-    audio.src = page.audioUrl;
-    setPlayingPage(page.pageNumber);
-    audio.onEnded(() => playSequence(readyPages, index + 1));
-    audio.onError(() => {
-      setPlayingPage(undefined);
-      void Taro.showToast({ title: "朗读播放失败，请重试", icon: "none" });
+  function openStoryPlayer(): void {
+    const readyPages = pagesRef.current;
+    if (!storyId || readyPages.length !== 4) return;
+    writePlayingStory({
+      id: storyId,
+      title,
+      theme,
+      createdAt: Date.now(),
+      pages: readyPages,
     });
-    audio.play();
+    void Taro.navigateTo({ url: "/pages/story-player/index" });
   }
 
   async function generateStoryImages(plans: StoryImagePlan[]): Promise<void> {
@@ -251,7 +242,7 @@ export default function StoryTimePage() {
       }, plan.operationId), {
         onStart: (plan) => setActiveImagePage(plan.pageNumber),
         onSuccess: (plan, image) => {
-          savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl });
+          savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl, imageFileKey: image.fileKey });
           setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== plan.pageNumber));
         },
         onFailure: (plan) => setFailedImagePages((current) => (
@@ -277,7 +268,6 @@ export default function StoryTimePage() {
   }
 
   function restart() {
-    audioRef.current?.destroy();
     setStep("theme");
     setTheme("");
     setTopics([]);
@@ -285,13 +275,13 @@ export default function StoryTimePage() {
     setTopicRefreshReadyAt(0);
     setTopicRefreshRemaining(0);
     setTitle("");
+    setStoryId("");
     replacePages([]);
     storyImageOperationIdsRef.current = {};
     imageGeneratingRef.current = false;
     setIllustrating(false);
     setActiveImagePage(undefined);
     setFailedImagePages([]);
-    setPlayingPage(undefined);
     dismissError();
   }
 
@@ -395,7 +385,7 @@ export default function StoryTimePage() {
               estimate="每页约半分钟"
             />
             {pages.map((page) => (
-              <View key={page.pageNumber} className={`story-card ${playingPage === page.pageNumber ? "story-card--playing" : ""}`}>
+              <View key={page.pageNumber} className="story-card">
                 <Text className="story-card__number">第 {page.pageNumber} 页</Text>
                 {page.imageUrl ? (
                   <Image className="story-card__image" src={page.imageUrl} mode="aspectFill" />
@@ -430,7 +420,7 @@ export default function StoryTimePage() {
                   ))}
                 </View>
                 <Button block size="xlarge" type="primary" loading={Boolean(busyMessage)} onClick={prepareAndPlay}>
-                  {playingPage ? `正在朗读第 ${playingPage} 页` : "播放四页朗读"}
+                  播放四页朗读
                 </Button>
               </>
             ) : null}
