@@ -20,7 +20,7 @@ describe("试用第七轮故事会本机书架", () => {
     expect(story).toContain("audioFileKey: speech.fileKey");
     expect(story).toContain('Taro.navigateTo({ url: "/pages/story-player/index" })');
     expect(player).toContain("pages[currentPageIndex]");
-    expect(player).not.toContain("pages.map(");
+    expect(player).not.toContain("{pages.map(");
     expect(player).toContain("第 {currentPageIndex + 1} / {pages.length} 页");
     expect(player).toContain("audio.onEnded");
     expect(player).toContain("setKeepScreenOn({ keepScreenOn: true })");
@@ -60,5 +60,15 @@ describe("试用第七轮故事会本机书架", () => {
     expect(story).toContain("我的故事");
     expect(player).toContain("我的故事");
     expect(player).toContain('Taro.navigateTo({ url: "/pages/story-library/index" })');
+  });
+
+  it("逐页合成带正文、页码和 AI 标识的四张图片保存到相册", () => {
+    const player = read("miniprogram/src/pages/story-player/index.tsx");
+    expect(player).toContain("<Canvas");
+    expect(player).toContain("exportStoryPages");
+    expect(player).toContain("saveImageToPhotosAlbum");
+    expect(player).toContain("AI 生成内容");
+    expect(player).toContain("Taro.openSetting");
+    expect(player).toContain("4 张绘本图片已保存到相册");
   });
 });

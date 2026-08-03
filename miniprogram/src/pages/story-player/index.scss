@@ -14,3 +14,4 @@
 .story-player__action { min-height: 108rpx; padding: 16rpx; border: 3rpx solid $color-primary; border-radius: 28rpx; background: $color-surface; color: $color-primary-strong; font-size: 40rpx; font-weight: 700; }
 .story-player__action--primary { background: $color-primary; color: #fff; }
 .story-player__status { display: block; margin-top: 18rpx; color: $color-secondary; font-size: $font-secondary; line-height: 1.5; text-align: center; }
+.story-player__export-canvas { position: fixed; left: -1200px; top: 0; width: 1080px; height: 1440px; pointer-events: none; }
