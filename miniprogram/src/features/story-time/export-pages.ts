@@ -1,12 +1,46 @@
 export type StoryPageRenderPlan = {
   canvasWidth: number;
   canvasHeight: number;
-  imageHeight: number;
+  titleX: number;
+  titleY: number;
+  imageBox: Rect;
+  textX: number;
+  textY: number;
+  textMaxWidth: number;
+  textLineHeight: number;
+  footerY: number;
   title: string;
   text: string;
   imagePath: string;
   footer: string;
 };
+
+export type Rect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export function fitImageWithinBox(input: {
+  sourceWidth: number;
+  sourceHeight: number;
+  box: Rect;
+}): Rect {
+  const { sourceWidth, sourceHeight, box } = input;
+  if (sourceWidth <= 0 || sourceHeight <= 0 || box.width <= 0 || box.height <= 0) {
+    throw new Error("图片尺寸无效");
+  }
+  const scale = Math.min(box.width / sourceWidth, box.height / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  return {
+    x: box.x + (box.width - width) / 2,
+    y: box.y + (box.height - height) / 2,
+    width,
+    height,
+  };
+}
 
 export function wrapCanvasText(
   text: string,
@@ -37,8 +71,15 @@ export function buildStoryPageRenderPlan(input: {
 }): StoryPageRenderPlan {
   return {
     canvasWidth: 1080,
-    canvasHeight: 1440,
-    imageHeight: 900,
+    canvasHeight: 1920,
+    titleX: 72,
+    titleY: 112,
+    imageBox: { x: 60, y: 190, width: 960, height: 960 },
+    textX: 72,
+    textY: 1240,
+    textMaxWidth: 936,
+    textLineHeight: 58,
+    footerY: 1840,
     title: input.title,
     text: input.text,
     imagePath: input.imagePath,

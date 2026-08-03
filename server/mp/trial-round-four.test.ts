@@ -32,13 +32,12 @@ describe("试用第四轮故事会交互", () => {
     expect(flow.createCustomStoryTopic("   ", "乐乐")).toBeUndefined();
   });
 
-  it("换一批灵感严格限制 30 秒内不能连点", async () => {
+  it("换一批灵感不再设置前端倒计时", async () => {
     expect(existsSync(flowPath)).toBe(true);
     if (!existsSync(flowPath)) return;
     const flow = await import(pathToFileURL(flowPath.pathname).href);
-    expect(flow.remainingTopicRefreshSeconds(1_000, 31_000)).toBe(30);
-    expect(flow.remainingTopicRefreshSeconds(30_001, 31_000)).toBe(1);
-    expect(flow.remainingTopicRefreshSeconds(31_000, 31_000)).toBe(0);
+    expect(flow.TOPIC_REFRESH_COOLDOWN_MS).toBeUndefined();
+    expect(flow.remainingTopicRefreshSeconds).toBeUndefined();
   });
 
   it("题材步骤同时提供四张推荐卡、自定义文字语音和换一批按钮", () => {
@@ -51,6 +50,8 @@ describe("试用第四轮故事会交互", () => {
     expect(page).toContain("例如：学会分享，或者一次去动物园的冒险…");
     expect(page).toContain("<VoiceInput");
     expect(page).toContain("换一批灵感");
-    expect(page).toContain("TOPIC_REFRESH_COOLDOWN_MS");
+    expect(page).not.toContain("TOPIC_REFRESH_COOLDOWN_MS");
+    expect(page).not.toContain("topicRefreshRemaining");
+    expect(page).not.toContain("还需 ${");
   });
 });

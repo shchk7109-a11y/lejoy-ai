@@ -3,6 +3,7 @@ import {
   StoryPageExportError,
   buildStoryPageRenderPlan,
   exportStoryPages,
+  fitImageWithinBox,
   isAlbumPermissionError,
   wrapCanvasText,
 } from "../../miniprogram/src/features/story-time/export-pages";
@@ -33,7 +34,36 @@ describe("故事绘本四页相册导出", () => {
       footer: "第 2 / 4 页 · AI 生成内容",
     });
     expect(plan.canvasWidth).toBeGreaterThan(0);
-    expect(plan.canvasHeight).toBeGreaterThan(plan.imageHeight);
+    expect(plan.canvasHeight).toBe(1920);
+    expect(plan.imageBox.y + plan.imageBox.height).toBeLessThan(plan.textY);
+    expect(plan.footerY).toBeLessThan(plan.canvasHeight);
+  });
+
+  it.each([
+    { name: "方图", source: [1024, 1024], expected: [900, 900] },
+    { name: "横图", source: [1600, 900], expected: [900, 506.25] },
+    { name: "竖图", source: [900, 1600], expected: [506.25, 900] },
+  ])("$name按原始宽高比完整放入图片框", ({ source, expected }) => {
+    const rect = fitImageWithinBox({
+      sourceWidth: source[0],
+      sourceHeight: source[1],
+      box: { x: 90, y: 220, width: 900, height: 900 },
+    });
+    expect(rect.width).toBeCloseTo(expected[0]);
+    expect(rect.height).toBeCloseTo(expected[1]);
+    expect(rect.width / rect.height).toBeCloseTo(source[0] / source[1]);
+    expect(rect.x).toBeGreaterThanOrEqual(90);
+    expect(rect.y).toBeGreaterThanOrEqual(220);
+    expect(rect.x + rect.width).toBeLessThanOrEqual(990);
+    expect(rect.y + rect.height).toBeLessThanOrEqual(1120);
+  });
+
+  it("拒绝无效图片尺寸，避免导出空白或无限坐标", () => {
+    expect(() => fitImageWithinBox({
+      sourceWidth: 0,
+      sourceHeight: 100,
+      box: { x: 0, y: 0, width: 900, height: 900 },
+    })).toThrow("图片尺寸无效");
   });
 
   it("严格按一至四页串行导出", async () => {

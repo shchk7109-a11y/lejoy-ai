@@ -9,10 +9,9 @@ import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import {
   createCustomStoryTopic,
-  remainingTopicRefreshSeconds,
   STORY_THEMES,
-  TOPIC_REFRESH_COOLDOWN_MS,
 } from "../../features/story-time/flow";
+import { runStoryStructureThenIllustrate } from "../../features/story-time/generation-flow";
 import { runStoryImageQueue, type StoryImagePlan } from "../../features/story-time/image-queue";
 import { createStoryId, storyStorage, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
@@ -44,8 +43,6 @@ export default function StoryTimePage() {
   const [age, setAge] = useState("6");
   const [topics, setTopics] = useState<StoryTopic[]>([]);
   const [customTopic, setCustomTopic] = useState("");
-  const [topicRefreshReadyAt, setTopicRefreshReadyAt] = useState(0);
-  const [topicRefreshRemaining, setTopicRefreshRemaining] = useState(0);
   const [title, setTitle] = useState("");
   const [storyId, setStoryId] = useState("");
   const [pages, setPages] = useState<StoryPage[]>([]);
@@ -60,21 +57,6 @@ export default function StoryTimePage() {
   const imageGeneratingRef = useRef(false);
   const storyImageOperationIdsRef = useRef<Record<number, string>>({});
   const { errorState, showMpError, dismissError, retryError } = useMpError();
-
-  useEffect(() => {
-    if (!topicRefreshReadyAt) {
-      setTopicRefreshRemaining(0);
-      return undefined;
-    }
-    const updateRemaining = () => {
-      const remaining = remainingTopicRefreshSeconds(Date.now(), topicRefreshReadyAt);
-      setTopicRefreshRemaining(remaining);
-      if (remaining === 0) setTopicRefreshReadyAt(0);
-    };
-    updateRemaining();
-    const timer = setInterval(updateRemaining, 1000);
-    return () => clearInterval(timer);
-  }, [topicRefreshReadyAt]);
 
   useEffect(() => {
     void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
@@ -107,7 +89,7 @@ export default function StoryTimePage() {
   async function loadTopics(operationId = createOperationId("story-topics")) {
     if (!theme || busyMessage || operationLockRef.current) return;
     operationLockRef.current = true;
-    setTopicRefreshReadyAt(Date.now() + TOPIC_REFRESH_COOLDOWN_MS);
+    dismissError();
     setBusyMessage("正在为孩子想故事题材…");
     try {
       const result = await mpApi.suggestStoryTopics({
@@ -126,11 +108,6 @@ export default function StoryTimePage() {
   }
 
   async function refreshTopics() {
-    const remaining = remainingTopicRefreshSeconds(Date.now(), topicRefreshReadyAt);
-    if (remaining > 0) {
-      await Taro.showToast({ title: `请等 ${remaining} 秒再换一批`, icon: "none", duration: 2500 });
-      return;
-    }
     await loadTopics();
   }
 
@@ -146,29 +123,38 @@ export default function StoryTimePage() {
   async function generateStory(topic: StoryTopic, operationId = createOperationId("story-structure")) {
     if (busyMessage || illustrating || operationLockRef.current) return;
     operationLockRef.current = true;
+    dismissError();
     setBusyMessage("先写四页故事，请稍候…");
     try {
-      const story = await mpApi.generateStoryStructure({
-        theme,
-        topic: topic.title,
-        childName: childName.trim() || undefined,
-        age: Number(age) || 6,
-        protagonist: topic.protagonist,
-      }, operationId);
-      setTitle(story.title);
-      setStoryId(createStoryId());
-      replacePages(story.pages);
-      setStep("result");
-      setBusyMessage("");
-      setFailedImagePages([]);
-      storyImageOperationIdsRef.current = {};
-      await generateStoryImages(story.pages.map((page) => ({
-        pageNumber: page.pageNumber,
-        imagePrompt: page.imagePrompt,
-        operationId: getStoryImageOperationId(page.pageNumber),
-      })));
-    } catch (error) {
-      showMpError(error, () => generateStory(topic, operationId));
+      await runStoryStructureThenIllustrate({
+        loadStructure: () => mpApi.generateStoryStructure({
+          theme,
+          topic: topic.title,
+          childName: childName.trim() || undefined,
+          age: Number(age) || 6,
+          protagonist: topic.protagonist,
+        }, operationId),
+        onStructureReady: (story) => {
+          dismissError();
+          setTitle(story.title);
+          setStoryId(createStoryId());
+          replacePages(story.pages);
+          setStep("result");
+          setBusyMessage("");
+          setFailedImagePages([]);
+          storyImageOperationIdsRef.current = {};
+        },
+        illustrate: (story) => generateStoryImages(story.pages.map((page) => ({
+          pageNumber: page.pageNumber,
+          imagePrompt: page.imagePrompt,
+          operationId: getStoryImageOperationId(page.pageNumber),
+        }))),
+        onStructureError: (error) => showMpError(error, () => generateStory(topic, operationId)),
+        onIllustrationError: () => {
+          setFailedImagePages(pagesRef.current.filter((page) => !page.imageUrl).map((page) => page.pageNumber));
+          void Taro.showToast({ title: "部分配图未完成，请重试对应页面", icon: "none", duration: 3000 });
+        },
+      });
     } finally {
       operationLockRef.current = false;
       setBusyMessage("");
@@ -279,8 +265,6 @@ export default function StoryTimePage() {
     setTheme("");
     setTopics([]);
     setCustomTopic("");
-    setTopicRefreshReadyAt(0);
-    setTopicRefreshRemaining(0);
     setTitle("");
     setStoryId("");
     replacePages([]);
@@ -346,14 +330,14 @@ export default function StoryTimePage() {
               ))}
             </View>
             <Button
-              className={`topic-refresh-button ${topicRefreshRemaining > 0 ? "topic-refresh-button--cooldown" : "topic-refresh-button--ready"}`}
+              className="topic-refresh-button"
               block
               size="xlarge"
               type="primary"
               disabled={Boolean(busyMessage)}
               onClick={() => void refreshTopics()}
             >
-              {topicRefreshRemaining > 0 ? `换一批灵感（还需 ${topicRefreshRemaining} 秒）` : "换一批灵感"}
+              换一批灵感
             </Button>
             <View className="custom-topic">
               <Text className="custom-topic__title">我来说主题</Text>

@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas, Image, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { PageHeader } from "../../components/PageHeader";
-import { buildStoryPageRenderPlan, exportStoryPages, isAlbumPermissionError, StoryPageExportError, wrapCanvasText } from "../../features/story-time/export-pages";
+import {
+  buildStoryPageRenderPlan,
+  exportStoryPages,
+  fitImageWithinBox,
+  isAlbumPermissionError,
+  StoryPageExportError,
+  wrapCanvasText,
+} from "../../features/story-time/export-pages";
 import { nextStoryPage, previousStoryPage, type LocalStory } from "../../features/story-time/library";
 import { readPlayingStory, storyStorage, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi } from "../../services/api";
@@ -11,16 +18,63 @@ import "./index.scss";
 const EXPORT_CANVAS_ID = "storyExportCanvas";
 const AI_CONTENT_LABEL = "AI 生成内容";
 
-function canvasToFile(): Promise<string> {
+type StoryCanvasImage = {
+  src: string;
+  onload?: () => void;
+  onerror?: (error: unknown) => void;
+};
+
+type StoryCanvasContext = {
+  fillStyle: string;
+  font: string;
+  textBaseline: string;
+  fillRect: (x: number, y: number, width: number, height: number) => void;
+  drawImage: (image: StoryCanvasImage, x: number, y: number, width: number, height: number) => void;
+  fillText: (text: string, x: number, y: number, maxWidth?: number) => void;
+  measureText: (text: string) => { width: number };
+};
+
+type StoryCanvasNode = {
+  width: number;
+  height: number;
+  createImage: () => StoryCanvasImage;
+  getContext: (type: "2d") => StoryCanvasContext;
+  requestAnimationFrame: (callback: () => void) => number;
+};
+
+function getExportCanvas(): Promise<StoryCanvasNode> {
+  return new Promise((resolve, reject) => {
+    Taro.createSelectorQuery().select(`#${EXPORT_CANVAS_ID}`).node((result) => {
+      const canvas = result.node as unknown as StoryCanvasNode;
+      if (!canvas) reject(new Error("绘本画布初始化失败"));
+      else resolve(canvas);
+    }).exec();
+  });
+}
+
+function loadCanvasImage(canvas: StoryCanvasNode, imagePath: string): Promise<StoryCanvasImage> {
+  return new Promise((resolve, reject) => {
+    const image = canvas.createImage();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = imagePath;
+  });
+}
+
+function waitForCanvasPaint(canvas: StoryCanvasNode): Promise<void> {
+  return new Promise((resolve) => canvas.requestAnimationFrame(resolve));
+}
+
+function canvasToFile(canvas: StoryCanvasNode, width: number, height: number): Promise<string> {
   return new Promise((resolve, reject) => {
     Taro.canvasToTempFilePath({
-      canvasId: EXPORT_CANVAS_ID,
+      canvas: canvas as unknown as Taro.Canvas,
       x: 0,
       y: 0,
-      width: 1080,
-      height: 1440,
-      destWidth: 1080,
-      destHeight: 1440,
+      width,
+      height,
+      destWidth: width,
+      destHeight: height,
       fileType: "jpg",
       quality: 0.92,
       success: (result) => resolve(result.tempFilePath),
@@ -147,21 +201,43 @@ export default function StoryPlayerPage() {
       text: page.text,
       imagePath,
     });
-    const context = Taro.createCanvasContext(EXPORT_CANVAS_ID);
-    context.setFillStyle("#fffaf2");
+    const [canvas, imageInfo] = await Promise.all([
+      getExportCanvas(),
+      Taro.getImageInfo({ src: imagePath }),
+    ]);
+    canvas.width = plan.canvasWidth;
+    canvas.height = plan.canvasHeight;
+    const [context, image] = await Promise.all([
+      Promise.resolve(canvas.getContext("2d")),
+      loadCanvasImage(canvas, imagePath),
+    ]);
+    const imageRect = fitImageWithinBox({
+      sourceWidth: imageInfo.width,
+      sourceHeight: imageInfo.height,
+      box: plan.imageBox,
+    });
+    context.fillStyle = "#fffaf2";
     context.fillRect(0, 0, plan.canvasWidth, plan.canvasHeight);
-    context.drawImage(plan.imagePath, 0, 0, plan.canvasWidth, plan.imageHeight);
-    context.setFillStyle("#292524");
-    context.setFontSize(52);
-    context.fillText(plan.title, 60, 980, 960);
-    context.setFontSize(38);
-    const lines = wrapCanvasText(plan.text, 960, (value) => context.measureText(value).width);
-    lines.slice(0, 7).forEach((line, index) => context.fillText(line, 60, 1050 + index * 48, 960));
-    context.setFillStyle("#57534e");
-    context.setFontSize(30);
-    context.fillText(plan.footer || AI_CONTENT_LABEL, 60, 1400, 960);
-    await new Promise<void>((resolve) => context.draw(false, () => resolve()));
-    await saveImageToAlbum(await canvasToFile());
+    context.fillStyle = "#f5ead8";
+    context.fillRect(plan.imageBox.x, plan.imageBox.y, plan.imageBox.width, plan.imageBox.height);
+    context.drawImage(image, imageRect.x, imageRect.y, imageRect.width, imageRect.height);
+    context.textBaseline = "alphabetic";
+    context.fillStyle = "#292524";
+    context.font = "700 56px sans-serif";
+    context.fillText(plan.title, plan.titleX, plan.titleY, plan.textMaxWidth);
+    context.font = "400 38px sans-serif";
+    const lines = wrapCanvasText(plan.text, plan.textMaxWidth, (value) => context.measureText(value).width);
+    lines.forEach((line, index) => context.fillText(
+      line,
+      plan.textX,
+      plan.textY + index * plan.textLineHeight,
+      plan.textMaxWidth,
+    ));
+    context.fillStyle = "#57534e";
+    context.font = "400 30px sans-serif";
+    context.fillText(plan.footer || AI_CONTENT_LABEL, plan.textX, plan.footerY, plan.textMaxWidth);
+    await waitForCanvasPaint(canvas);
+    await saveImageToAlbum(await canvasToFile(canvas, plan.canvasWidth, plan.canvasHeight));
   }
 
   async function downloadStoryToAlbum(): Promise<void> {
@@ -207,7 +283,7 @@ export default function StoryPlayerPage() {
       <PageHeader title={story.title || "正在讲故事"} />
       <View className="story-player__content">
         <View className="story-player__image-wrap">
-          <Image className="story-player__image" src={currentPage.imageUrl || ""} mode="aspectFill" />
+          <Image className="story-player__image" src={currentPage.imageUrl || ""} mode="aspectFit" />
           <Text className="story-player__page">第 {currentPageIndex + 1} / {pages.length} 页</Text>
         </View>
         <Text className="story-player__text">{currentPage.text}</Text>
@@ -223,7 +299,7 @@ export default function StoryPlayerPage() {
         <View className="story-player__action clickable" onClick={() => void Taro.navigateTo({ url: "/pages/story-library/index" })}><Text>📚 我的故事</Text></View>
         <Text className="story-player__status">故事只保存在当前手机，最多保存 6 本</Text>
       </View>
-      <Canvas className="story-player__export-canvas" canvasId={EXPORT_CANVAS_ID} />
+      <Canvas className="story-player__export-canvas" id={EXPORT_CANVAS_ID} type="2d" />
     </View>
   );
 }

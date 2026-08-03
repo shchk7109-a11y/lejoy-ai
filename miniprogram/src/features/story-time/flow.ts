@@ -7,12 +7,6 @@ export const STORY_THEMES = [
   { name: "超级英雄", emoji: "🦸", tip: "用勇气和责任守护大家" },
 ] as const;
 
-export const TOPIC_REFRESH_COOLDOWN_MS = 30_000;
-
-export function remainingTopicRefreshSeconds(now: number, readyAt: number): number {
-  return Math.max(0, Math.ceil((readyAt - now) / 1000));
-}
-
 export function createCustomStoryTopic(value: string, childName: string): {
   title: string;
   description: string;
