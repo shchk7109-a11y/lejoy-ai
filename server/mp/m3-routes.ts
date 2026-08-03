@@ -20,6 +20,7 @@ import { sendMpTimeoutError } from "./operations";
 import { appendChatDisclaimer, blocksChatInput, blocksChatOutput } from "./chat-guard";
 import { CHAT_MEDICAL_GUIDANCE, CHAT_SYSTEM_PROMPT } from "./chat-persona";
 import { createMediaCheckTask, findMediaCheckTaskByFile } from "./media-check-tasks";
+import { decodeImageUpload } from "./image-upload";
 import { checkMediaSecurity, checkTextSecurity, type MediaSecuritySubmission, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
 
@@ -94,6 +95,13 @@ function topicExclusions(value: unknown): string[] | undefined {
   return titles;
 }
 
+function ownedStoryReference(fileKey: string, userId: number): boolean {
+  return new RegExp(
+    `^story-refs/${userId}/[A-Za-z0-9][A-Za-z0-9._-]*\\.(?:jpe?g|png|webp)$`,
+    "i",
+  ).test(fileKey);
+}
+
 export function createM3Router(deps: M3Dependencies, authenticate: RequestHandler): Router {
   const router = Router();
   router.use(authenticate);
@@ -137,6 +145,45 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     }
     return deps.storageGet(fileKey);
   };
+
+  const resolveStoryReference = async (fileKey: string, user: { id: number }) => {
+    if (!ownedStoryReference(fileKey, user.id)) return undefined;
+    if (deps.contentSecurityMode === "wechat") {
+      const task = await deps.findMediaCheckTaskByFile(user.id, fileKey);
+      if (!task || task.status === "risky") return undefined;
+    }
+    return deps.storageGet(fileKey);
+  };
+
+  router.post("/story/reference-image", asyncRoute(async (req, res) => {
+    let decoded: ReturnType<typeof decodeImageUpload>;
+    try {
+      decoded = decodeImageUpload(req.body);
+    } catch (error) {
+      badRequest(res, error instanceof Error ? error.message : "图片参数错误");
+      return;
+    }
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const file = await deps.storagePut(
+      `story-refs/${user.id}/${deps.createFileId()}.${decoded.extension}`,
+      decoded.buffer,
+      decoded.mimeType,
+    );
+    const securityStatus = await submitStoredImage(file, user);
+    res.json({ fileKey: file.key, securityStatus });
+  }));
+
+  router.post("/story/reference-image/release", asyncRoute(async (req, res) => {
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const fileKey = nonEmpty(req.body?.fileKey);
+    if (!ownedStoryReference(fileKey, user.id)) {
+      badRequest(res, "只能删除当前用户自己的临时参考图");
+      return;
+    }
+    await deps.storageDelete(fileKey);
+    console.info("[story.reference-image.release]", { userId: user.id, deleted: true });
+    res.json({ deleted: true });
+  }));
 
   router.post("/story/release-assets", asyncRoute(async (req, res) => {
     const user = (req as MpAuthenticatedRequest).mpUser;
@@ -234,6 +281,14 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
     const user = (req as MpAuthenticatedRequest).mpUser;
+    const referenceFileKey = nonEmpty(req.body?.referenceFileKey);
+    const reference = referenceFileKey
+      ? await resolveStoryReference(referenceFileKey, user)
+      : undefined;
+    if (referenceFileKey && !reference) {
+      badRequest(res, "请选择当前账号已上传且通过安全登记的故事参考图");
+      return;
+    }
     const startedAt = Date.now();
     let success = false;
     try {
@@ -241,6 +296,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
         prompt: buildStoryImagePrompt(imagePrompt, pageNumber),
         aspectRatio: "1:1",
         profile: "story",
+        ...(reference ? { referenceImageUrl: reference.url } : {}),
       });
       const file = await deps.storagePut(
         `stories/${user.id}/${deps.createFileId()}-p${pageNumber}.png`,
@@ -253,6 +309,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     } finally {
       console.info("[story.page-image]", {
         pageNumber,
+        hasReferenceImage: Boolean(reference),
         durationMs: Math.max(0, Date.now() - startedAt),
         success,
       });

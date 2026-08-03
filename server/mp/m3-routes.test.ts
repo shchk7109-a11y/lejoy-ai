@@ -234,9 +234,92 @@ describe("M3 故事会 REST 接口", () => {
     });
     expect(info).toHaveBeenCalledWith("[story.page-image]", expect.objectContaining({
       pageNumber: 2,
+      hasReferenceImage: false,
       success: true,
       durationMs: expect.any(Number),
     }));
+  });
+
+  it("上传故事参考图到当前用户临时目录并登记媒体安全", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0x01]);
+    const response = await post(baseUrl, "/story/reference-image", {
+      base64: jpeg.toString("base64"),
+      mimeType: "image/jpeg",
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      fileKey: "story-refs/7/fixed-id.jpg",
+      securityStatus: "pending",
+    });
+    expect(deps.storagePut).toHaveBeenCalledWith(
+      "story-refs/7/fixed-id.jpg",
+      jpeg,
+      "image/jpeg",
+    );
+    expect(deps.createMediaCheckTask).toHaveBeenCalledWith({
+      traceId: "trace-m3",
+      userId: 7,
+      fileKey: "story-refs/7/fixed-id.jpg",
+      status: "pending",
+    });
+  });
+
+  it("单页配图只接受当前用户的故事参考图", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const deps = dependencies({
+      findMediaCheckTaskByFile: vi.fn(async (_userId, fileKey) => ({
+        fileKey,
+        status: "pass",
+      } as never)),
+    });
+    const baseUrl = await startApp(deps);
+    const accepted = await post(baseUrl, "/story/page-image", {
+      imagePrompt: "孩子走进森林",
+      pageNumber: 1,
+      referenceFileKey: "story-refs/7/child.jpg",
+    });
+
+    expect(accepted.status).toBe(200);
+    expect(deps.aiGenerateImage).toHaveBeenCalledWith(expect.objectContaining({
+      referenceImageUrl: "https://cdn.example/story-refs/7/child.jpg",
+    }));
+    expect(info).toHaveBeenCalledWith("[story.page-image]", expect.objectContaining({
+      hasReferenceImage: true,
+    }));
+
+    for (const referenceFileKey of [
+      "story-refs/8/child.jpg",
+      "uploads/7/child.jpg",
+      "https://attacker.example/child.jpg",
+    ]) {
+      const rejected = await post(baseUrl, "/story/page-image", {
+        imagePrompt: "孩子走进森林",
+        pageNumber: 1,
+        referenceFileKey,
+      });
+      expect(rejected.status).toBe(400);
+    }
+  });
+
+  it("参考图释放接口幂等删除且拒绝其他用户文件", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const accepted = await post(baseUrl, "/story/reference-image/release", {
+      fileKey: "story-refs/7/child.jpg",
+    });
+
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toEqual({ deleted: true });
+    expect(deps.storageDelete).toHaveBeenCalledWith("story-refs/7/child.jpg");
+
+    const rejected = await post(baseUrl, "/story/reference-image/release", {
+      fileKey: "story-refs/8/child.jpg",
+    });
+    expect(rejected.status).toBe(400);
   });
 
   it("朗读音频落 OSS，只有第一页扣 2 积分", async () => {
