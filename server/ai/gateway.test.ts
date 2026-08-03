@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { pickTextProvider, pickImageProvider, pickTtsProvider, pickAsrProvider, ProviderKeys } from "./gateway";
 import { buildKimiMessages } from "./kimiClient";
 import { mapAspectToSize, nearestSupportedAspectRatio } from "./volcImageClient";
-import { mapVoice } from "./aliVoiceClient";
+import { mapVoice, resolveAliTtsProfile } from "./aliVoiceClient";
+import { ENV } from "../_core/env";
 
 const allKeys: ProviderKeys = { moonshot: true, ark: true, dashscope: true, minimax: true, gemini: true, forge: true };
 const noNewKeys: ProviderKeys = { moonshot: false, ark: false, dashscope: false, minimax: true, gemini: true, forge: true };
@@ -87,5 +88,28 @@ describe("千问TTS音色映射", () => {
   it("未知音色回落到默认", () => {
     expect(mapVoice("nonexistent")).toBe("Cherry");
     expect(mapVoice(undefined)).toBe("Cherry");
+  });
+});
+
+describe("阿里TTS模型分流", () => {
+  it("温柔女声和沉稳讲述使用 CosyVoice 龙妙与龙楠", () => {
+    expect(resolveAliTtsProfile("gentle")).toMatchObject({
+      family: "cosyvoice",
+      model: ENV.dashscopeCosyvoiceModel,
+      voice: "longmiao_v3",
+    });
+    expect(resolveAliTtsProfile("steady")).toMatchObject({
+      family: "cosyvoice",
+      model: ENV.dashscopeCosyvoiceModel,
+      voice: "longnan_v3",
+    });
+  });
+
+  it("上海话继续使用 Qwen TTS 的 Jada", () => {
+    expect(resolveAliTtsProfile("dialect_shanghai")).toMatchObject({
+      family: "qwen",
+      model: ENV.dashscopeTtsModel,
+      voice: "Jada",
+    });
   });
 });

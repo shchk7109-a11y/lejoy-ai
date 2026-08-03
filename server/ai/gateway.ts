@@ -21,7 +21,7 @@ import {
   AspectRatio,
 } from "./volcImageClient";
 import { readImageDimensions } from "./imageDimensions";
-import { dashscopeTTS, dashscopeASR } from "./aliVoiceClient";
+import { dashscopeTTS, dashscopeASR, resolveAliTtsProfile } from "./aliVoiceClient";
 import { invokeMiniMaxText, invokeMiniMaxImage, invokeMiniMaxTTS } from "./minimaxClient";
 
 // ─── 供应商选择（纯函数，便于测试）────────────────────────────────────────────
@@ -312,7 +312,7 @@ export async function aiTTS(
   const provider = pickTtsProvider(ENV.aiTtsProvider, currentKeys());
 
   if (provider === "ali") {
-    recordAiRequestMetadata("ali", ENV.dashscopeTtsModel);
+    recordAiRequestMetadata("ali", resolveAliTtsProfile(voiceType).model);
     return dashscopeTTS(text, voiceType);
   }
   if (provider === "minimax") {

@@ -46,6 +46,7 @@ export const ENV = {
   dashscopeApiKey: process.env.DASHSCOPE_API_KEY ?? "",
   dashscopeBaseUrl: process.env.DASHSCOPE_BASE_URL ?? "https://dashscope.aliyuncs.com",
   dashscopeTtsModel: process.env.DASHSCOPE_TTS_MODEL ?? "qwen3-tts-flash",
+  dashscopeCosyvoiceModel: process.env.DASHSCOPE_COSYVOICE_MODEL ?? "cosyvoice-v3-flash",
   dashscopeAsrModel: process.env.DASHSCOPE_ASR_MODEL ?? "qwen3-asr-flash",
 
   // 能力级供应商切换："auto"（有密钥则用新链路）| 明确指定 deepseek/kimi/volc/ali/minimax/gemini/forge

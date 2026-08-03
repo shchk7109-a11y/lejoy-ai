@@ -1,6 +1,6 @@
 /**
  * 阿里云 DashScope 语音客户端
- * - TTS：qwen3-tts-flash（同步 REST，返回音频 URL；含北京话/上海话/四川话/粤语等方言音色）
+ * - TTS：Qwen3-TTS（含方言）+ CosyVoice（龙妙/龙楠），同步 REST 返回音频 URL
  * - ASR：qwen3-asr-flash（同步 REST，直接传 OSS 音频 URL，≤5分钟音频免轮询）
  * 接口：POST {DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation
  */
@@ -34,6 +34,39 @@ export function mapVoice(voiceType?: string): string {
 }
 
 const GENERATION_PATH = "/api/v1/services/aigc/multimodal-generation/generation";
+const COSYVOICE_PATH = "/api/v1/services/audio/tts/SpeechSynthesizer";
+
+const COSYVOICE_TTS_VOICE_MAP: Record<string, string> = {
+  gentle: "longmiao_v3",
+  steady: "longnan_v3",
+};
+
+export type AliTtsProfile = {
+  family: "qwen" | "cosyvoice";
+  model: string;
+  voice: string;
+  path: string;
+};
+
+/** 应用音色键对应的实际百炼模型、音色及接口。 */
+export function resolveAliTtsProfile(voiceType = "lively"): AliTtsProfile {
+  const cosyVoice = COSYVOICE_TTS_VOICE_MAP[voiceType];
+  if (cosyVoice) {
+    return {
+      family: "cosyvoice",
+      model: ENV.dashscopeCosyvoiceModel,
+      voice: cosyVoice,
+      path: COSYVOICE_PATH,
+    };
+  }
+
+  return {
+    family: "qwen",
+    model: ENV.dashscopeTtsModel,
+    voice: mapVoice(voiceType),
+    path: GENERATION_PATH,
+  };
+}
 
 /** 语音合成：返回 base64 音频与 MIME（与现有前端契约一致） */
 export async function dashscopeTTS(
@@ -42,25 +75,24 @@ export async function dashscopeTTS(
 ): Promise<{ audioData: string; audioMime: string }> {
   if (!ENV.dashscopeApiKey) throw new Error("DASHSCOPE_API_KEY 未配置");
 
+  const profile = resolveAliTtsProfile(voiceType);
   const body = {
-    model: ENV.dashscopeTtsModel,
-    input: {
-      text,
-      voice: mapVoice(voiceType),
-      language_type: "Chinese",
-    },
+    model: profile.model,
+    input: profile.family === "cosyvoice"
+      ? { text, voice: profile.voice, format: "wav", sample_rate: 24000 }
+      : { text, voice: profile.voice, language_type: "Chinese" },
   };
 
   return withRetry(
     async () => {
-      const resp = await axios.post(`${ENV.dashscopeBaseUrl}${GENERATION_PATH}`, body, {
+      const resp = await axios.post(`${ENV.dashscopeBaseUrl}${profile.path}`, body, {
         headers: {
           Authorization: `Bearer ${ENV.dashscopeApiKey}`,
           "Content-Type": "application/json",
         },
         timeout: 90000,
       });
-      const audioUrl = resp.data?.output?.audio?.url;
+      const audioUrl = resp.data?.output?.audio?.url ?? resp.data?.output?.url;
       if (!audioUrl) throw new Error("TTS 合成失败：未返回音频URL");
       // 下载音频转 base64（URL 24小时过期，必须落地）
       const audioResp = await axios.get(audioUrl, { responseType: "arraybuffer", timeout: 60000 });
@@ -70,7 +102,7 @@ export async function dashscopeTTS(
         audioMime,
       };
     },
-    { label: "QwenTTS", baseDelayMs: 3000 }
+    { label: profile.family === "cosyvoice" ? "CosyVoiceTTS" : "QwenTTS", baseDelayMs: 3000 }
   );
 }
 
