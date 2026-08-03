@@ -293,7 +293,7 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     let success = false;
     try {
       const base64 = await deps.aiGenerateImage({
-        prompt: buildStoryImagePrompt(imagePrompt, pageNumber),
+        prompt: buildStoryImagePrompt(imagePrompt, pageNumber, { hasChildReference: Boolean(reference) }),
         aspectRatio: "1:1",
         profile: "story",
         ...(reference ? { referenceImageUrl: reference.url } : {}),

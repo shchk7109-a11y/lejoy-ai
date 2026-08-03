@@ -239,8 +239,13 @@ export async function aiGenerateImage(params: {
   prompt: string;
   aspectRatio?: AspectRatio;
   profile?: "story";
+  referenceImageUrl?: string;
 }): Promise<string> {
   const provider = pickImageProvider(ENV.aiImageProvider, currentKeys());
+
+  if (params.referenceImageUrl && (params.profile !== "story" || provider !== "volc")) {
+    throw new Error("当前图片服务暂不支持照片主角");
+  }
 
   if (provider === "volc") {
     if (params.profile === "story") {
@@ -250,6 +255,7 @@ export async function aiGenerateImage(params: {
         aspectRatio: params.aspectRatio,
         model: ENV.arkStoryImageModel,
         size: "1K",
+        ...(params.referenceImageUrl ? { imageUrls: [params.referenceImageUrl] } : {}),
       });
     }
     recordAiRequestMetadata("volc", ENV.arkImageModel);

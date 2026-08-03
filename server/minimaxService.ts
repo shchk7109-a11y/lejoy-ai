@@ -56,8 +56,14 @@ function logJsonParseFailure(task: string, error: unknown): void {
   console.error(`[AI] ${task} JSON解析失败`, { errorType });
 }
 
-export function buildStoryImagePrompt(imagePrompt: string, pageNumber: number): string {
-  return `儿童绘本插画，温暖可爱的风格，色彩明亮柔和，角色友善。第${pageNumber}页：${imagePrompt}`;
+export function buildStoryImagePrompt(
+  imagePrompt: string,
+  pageNumber: number,
+  options: { hasChildReference?: boolean } = {},
+): string {
+  const base = `儿童绘本插画，温暖可爱的风格，色彩明亮柔和，角色友善。第${pageNumber}页：${imagePrompt}`;
+  if (!options.hasChildReference) return base;
+  return `${base}。参考图仅用于主角外貌：保留主角的脸型、发型、肤色和显著外貌特征，转化为温暖适龄的儿童绘本形象；四页保持主角年龄、五官、发型和服装一致，默认参考并适度简化原照片服装，特殊装扮只改变服装；忽略参考图背景、地点、其他人物、文字、水印和标识；不得推断或输出姓名、学校、地址等身份信息；避免证件照和过度写实效果。`;
 }
 
 /**

@@ -91,4 +91,23 @@ describe("Seedream 故事配图参数", () => {
       aspectRatio: "1:1",
     });
   });
+
+  it("故事页把一张儿童参考图传给专用 Seedream 模型", async () => {
+    mocks.volcGenerateImage.mockResolvedValue("image-base64");
+
+    await aiGenerateImage({
+      prompt: "儿童绘本第一页",
+      aspectRatio: "1:1",
+      profile: "story",
+      referenceImageUrl: "https://cdn.example/story-refs/7/child.jpg",
+    });
+
+    expect(mocks.volcGenerateImage).toHaveBeenCalledWith({
+      prompt: "儿童绘本第一页",
+      aspectRatio: "1:1",
+      model: "story-image-model",
+      size: "1K",
+      imageUrls: ["https://cdn.example/story-refs/7/child.jpg"],
+    });
+  });
 });
