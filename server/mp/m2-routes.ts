@@ -17,15 +17,11 @@ import { storageDelete, storageGet, storagePut } from "../storage";
 import { createMediaCheckTask, findMediaCheckTask, findMediaCheckTaskByFile, updateMediaCheckTaskStatus } from "./media-check-tasks";
 import { checkMediaSecurity, type MediaSecuritySubmission } from "./security";
 import type { MpAuthenticatedRequest } from "./auth";
+import { decodeImageUpload } from "./image-upload";
 import { sendMpTimeoutError } from "./operations";
 import { resolveWechatMediaStatus, verifyWechatSignature, type MediaCheckStatus } from "./wechat-callback";
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const IMAGE_MIME_EXTENSIONS = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-} as const;
+const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
 
 type StoredFile = { key: string; url: string };
 
@@ -77,32 +73,6 @@ function badRequest(res: Response, message: string): void {
   res.status(400).json({ error: { code: "BAD_REQUEST", message } });
 }
 
-function decodeImage(body: unknown): { buffer: Buffer; mimeType: keyof typeof IMAGE_MIME_EXTENSIONS } {
-  if (!body || typeof body !== "object") throw new Error("图片参数不能为空");
-  const input = body as { base64?: unknown; mimeType?: unknown };
-  if (typeof input.base64 !== "string" || !input.base64) throw new Error("base64 图片不能为空");
-  if (typeof input.mimeType !== "string" || !(input.mimeType in IMAGE_MIME_EXTENSIONS)) {
-    throw new Error("仅支持 jpg、png、webp 图片");
-  }
-  const mimeType = input.mimeType as keyof typeof IMAGE_MIME_EXTENSIONS;
-  const dataUrlMatch = input.base64.match(/^data:([^;]+);base64,([\s\S]+)$/);
-  if (dataUrlMatch && dataUrlMatch[1] !== mimeType) throw new Error("图片 MIME 与数据内容不一致");
-  const encoded = dataUrlMatch?.[2] ?? input.base64;
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
-    throw new Error("base64 图片格式无效");
-  }
-  const buffer = Buffer.from(encoded, "base64");
-  if (!buffer.length) throw new Error("图片内容不能为空");
-  if (buffer.length > MAX_IMAGE_BYTES) throw new Error("图片不能超过 10MB");
-  const signatureMatches = mimeType === "image/jpeg"
-    ? buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
-    : mimeType === "image/png"
-      ? buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-      : buffer.length >= 12 && buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
-  if (!signatureMatches) throw new Error("图片内容与 MIME 类型不匹配");
-  return { buffer, mimeType };
-}
-
 function decodeAudio(body: unknown): { buffer: Buffer; mimeType: "audio/mpeg" } {
   if (!body || typeof body !== "object") throw new Error("录音参数不能为空");
   const input = body as { base64?: unknown; mimeType?: unknown };
@@ -114,7 +84,7 @@ function decodeAudio(body: unknown): { buffer: Buffer; mimeType: "audio/mpeg" } 
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 !== 0) throw new Error("base64 录音格式无效");
   const buffer = Buffer.from(encoded, "base64");
   if (!buffer.length) throw new Error("录音内容不能为空");
-  if (buffer.length > MAX_IMAGE_BYTES) throw new Error("录音不能超过 10MB");
+  if (buffer.length > MAX_AUDIO_BYTES) throw new Error("录音不能超过 10MB");
   return { buffer, mimeType: "audio/mpeg" };
 }
 
@@ -219,17 +189,16 @@ export function createM2Router(deps: M2Dependencies, authenticate: RequestHandle
   });
 
   router.post("/upload/image", asyncRoute(async (req, res) => {
-    let decoded: ReturnType<typeof decodeImage>;
+    let decoded: ReturnType<typeof decodeImageUpload>;
     try {
-      decoded = decodeImage(req.body);
+      decoded = decodeImageUpload(req.body);
     } catch (error) {
       badRequest(res, error instanceof Error ? error.message : "图片参数错误");
       return;
     }
     const user = (req as MpAuthenticatedRequest).mpUser;
-    const extension = IMAGE_MIME_EXTENSIONS[decoded.mimeType];
     const file = await deps.storagePut(
-      `uploads/${user.id}/${deps.createFileId()}.${extension}`,
+      `uploads/${user.id}/${deps.createFileId()}.${decoded.extension}`,
       decoded.buffer,
       decoded.mimeType,
     );

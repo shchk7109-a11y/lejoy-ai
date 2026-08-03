@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../../drizzle/schema";
+import { decodeImageUpload } from "./image-upload";
 import { createM2Router, type M2Dependencies } from "./m2-routes";
 
 const testUser: User = {
@@ -54,6 +55,24 @@ function dependencies(overrides: Partial<M2Dependencies> = {}): M2Dependencies {
 }
 
 const servers: Server[] = [];
+
+describe("共享图片解码器", () => {
+  it("只接受签名匹配的 jpg、png、webp", () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from("reference"),
+    ]);
+
+    expect(decodeImageUpload({
+      base64: png.toString("base64"),
+      mimeType: "image/png",
+    })).toEqual({ buffer: png, mimeType: "image/png", extension: "png" });
+    expect(() => decodeImageUpload({
+      base64: png.toString("base64"),
+      mimeType: "image/jpeg",
+    })).toThrow("图片内容与 MIME 类型不匹配");
+  });
+});
 
 async function startApp(deps: M2Dependencies) {
   const app = express();
