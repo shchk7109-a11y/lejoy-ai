@@ -137,7 +137,19 @@ export const mpApi = {
     request<{ topics: StoryTopic[] }>("/api/mp/story/suggest-topics", { method: "POST", data, retry: "never", operationId }),
   generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }, operationId?: string) =>
     request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data, retry: "never", operationId }),
-  generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number }, operationId?: string) =>
+  uploadStoryReference: (data: { base64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" }) =>
+    request<{ fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/story/reference-image", {
+      method: "POST",
+      data,
+      retry: "never",
+    }),
+  releaseStoryReference: (fileKey: string) =>
+    request<{ deleted: true }>("/api/mp/story/reference-image/release", {
+      method: "POST",
+      data: { fileKey },
+      retry: "never",
+    }),
+  generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number; referenceFileKey?: string }, operationId?: string) =>
     request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", {
       method: "POST",
       data,
