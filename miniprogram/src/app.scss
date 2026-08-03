@@ -6,6 +6,13 @@ page {
   color: $color-text;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: $font-body;
+  --nutui-color-primary: #{$color-primary};
+  --nutui-color-primary-stop-1: #{$color-primary};
+  --nutui-color-primary-stop-2: #{$color-primary-strong};
+  --nutui-button-primary-border-color: #{$color-primary};
+  --nutui-button-primary-disabled: #{$color-disabled};
+  --nutui-button-xlarge-height: #{$button-main-height};
+  --nutui-button-xlarge-font-size: #{$font-button};
 }
 
 view,
@@ -29,10 +36,38 @@ button,
   min-height: $touch-min;
 }
 
-.nut-button--xlarge {
+.nut-button-xlarge,
+.nut-button-xlarge-children {
   min-height: $button-main-height !important;
   font-size: $font-button !important;
   font-weight: 700 !important;
+}
+
+.nut-button-primary-solid {
+  background: $color-primary !important;
+  border-color: $color-primary !important;
+  color: $color-surface !important;
+}
+
+.nut-button-primary-outline,
+.nut-button-primary-dashed,
+.nut-button-primary-none {
+  border-color: $color-primary !important;
+  color: $color-primary-strong !important;
+}
+
+.nut-button-primary-disabled,
+.nut-button-primary-solid-disabled {
+  background: $color-disabled !important;
+  border-color: $color-disabled !important;
+  color: $color-disabled-text !important;
+}
+
+.nut-button-primary-outline-disabled,
+.nut-button-primary-dashed-disabled,
+.nut-button-primary-none-disabled {
+  border-color: $color-disabled !important;
+  color: $color-disabled-text !important;
 }
 
 .accessibility-root {
@@ -49,7 +84,8 @@ button,
   --lejoy-button-main-height: 124rpx;
 }
 
-.large-text-mode .nut-button--xlarge {
+.large-text-mode .nut-button-xlarge,
+.large-text-mode .nut-button-xlarge-children {
   min-height: var(--lejoy-button-main-height) !important;
   font-size: var(--lejoy-font-button) !important;
 }

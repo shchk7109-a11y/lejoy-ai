@@ -1,4 +1,8 @@
 import { defineConfig, type UserConfigExport } from "@tarojs/cli";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const miniprogramRoot = fileURLToPath(new URL("../", import.meta.url));
 
 const releaseChannel = process.env.TARO_APP_RELEASE_CHANNEL || "develop";
 const apiBaseUrls: Record<string, string | undefined> = {
@@ -27,6 +31,11 @@ const config: UserConfigExport = {
   },
   sourceRoot: "src",
   outputRoot: "dist",
+  alias: {
+    "react$": resolve(miniprogramRoot, "node_modules", "react", "index.js"),
+    "react/jsx-runtime$": resolve(miniprogramRoot, "node_modules", "react", "jsx-runtime.js"),
+    "react/jsx-dev-runtime$": resolve(miniprogramRoot, "node_modules", "react", "jsx-dev-runtime.js"),
+  },
   defineConstants: {
     __LEJOY_API_BASE_URL__: JSON.stringify(apiBaseUrl),
     __LEJOY_MINIPROGRAM_VERSION__: JSON.stringify("1.0.0"),

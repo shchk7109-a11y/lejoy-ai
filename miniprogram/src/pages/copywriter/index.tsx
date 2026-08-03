@@ -21,17 +21,17 @@ const questions: Record<Exclude<CopywriterStep, "customContext">, { title: strin
   scenario: {
     title: "这段话用在什么场景？",
     subtitle: "第 1 步，共 4 步",
-    options: ["节日祝福", "生日寿辰", "日常关怀", "安慰鼓励", "感谢致意", "发朋友圈"],
+    options: ["节日祝福", "生日寿辰", "发朋友圈", "日常关怀", "安慰鼓励", "感谢致意", "思念问候", "长辈祝寿"],
   },
   relationship: {
     title: "这段话想送给谁？",
     subtitle: "第 2 步，共 4 步",
-    options: ["家人", "长辈", "朋友", "晚辈", "伴侣", "同事"],
+    options: ["朋友", "家人", "长辈", "晚辈", "伴侣", "同事"],
   },
   tone: {
     title: "希望是什么语气？",
     subtitle: "第 3 步，共 4 步",
-    options: ["温暖亲切", "庄重得体", "幽默轻松", "文采飞扬"],
+    options: ["温暖亲切", "幽默调侃", "文采飞扬", "诗歌赋词", "散文随笔", "人生感悟", "庄重得体"],
   },
 };
 
