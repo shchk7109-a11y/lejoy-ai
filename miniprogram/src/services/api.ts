@@ -148,7 +148,7 @@ export const mpApi = {
   generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }, operationId?: string) =>
     request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never", operationId }),
   releaseStoryAssets: (fileKeys: string[]) =>
-    request<{ deleted: number }>("/api/mp/story/release-assets", { method: "POST", data: { fileKeys }, retry: "never" }),
+    request<{ deleted: number; retainedFileKeys?: string[] }>("/api/mp/story/release-assets", { method: "POST", data: { fileKeys }, retry: "never" }),
   getRecipe: (foodName: string, operationId?: string) =>
     request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never", operationId }),
   identifyPlant: (sourceFileKey: string, operationId?: string) =>

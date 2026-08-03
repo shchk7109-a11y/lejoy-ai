@@ -101,9 +101,12 @@ export function createStoryStorage(deps: StoryStorageDependencies) {
   const flushRemoteAssets = async (release: (fileKeys: string[]) => Promise<unknown>): Promise<number> => {
     const fileKeys = pendingFileKeys(deps.readPendingAssets());
     if (!fileKeys.length) return 0;
-    await release(fileKeys);
-    deps.writePendingAssets([]);
-    return fileKeys.length;
+    const result = await release(fileKeys);
+    const retained = result && typeof result === "object" && "retainedFileKeys" in result
+      ? pendingFileKeys((result as { retainedFileKeys?: unknown }).retainedFileKeys)
+      : [];
+    deps.writePendingAssets(retained);
+    return fileKeys.length - retained.length;
   };
 
   return { list, saveDraft, remove, queueRemoteAssets, flushRemoteAssets };

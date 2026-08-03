@@ -111,4 +111,13 @@ describe("故事本地文件事务", () => {
     expect(release).toHaveBeenCalledWith(["stories/7/a.png", "stories-audio/7/a.mp3"]);
     expect(test.getPending()).toEqual([]);
   });
+
+  it("服务端要求保留的审核中图片会继续留在待释放队列", async () => {
+    const test = harness();
+    test.storage.queueRemoteAssets(["stories/7/pending.png", "stories-audio/7/done.mp3"]);
+
+    await test.storage.flushRemoteAssets(async () => ({ retainedFileKeys: ["stories/7/pending.png"] }));
+
+    expect(test.getPending()).toEqual(["stories/7/pending.png"]);
+  });
 });

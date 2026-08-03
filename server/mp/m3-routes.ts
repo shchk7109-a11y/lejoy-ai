@@ -144,13 +144,29 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
     const startedAt = Date.now();
-    await Promise.all(fileKeys.map((fileKey) => deps.storageDelete(fileKey)));
+    const retainedFileKeys: string[] = [];
+    const deletableFileKeys: string[] = [];
+    for (const fileKey of fileKeys) {
+      if (deps.contentSecurityMode === "wechat" && fileKey.startsWith(`stories/${user.id}/`)) {
+        const task = await deps.findMediaCheckTaskByFile(user.id, fileKey);
+        if (task?.status === "pending") {
+          retainedFileKeys.push(fileKey);
+          continue;
+        }
+      }
+      deletableFileKeys.push(fileKey);
+    }
+    await Promise.all(deletableFileKeys.map((fileKey) => deps.storageDelete(fileKey)));
     console.info("[story.release-assets]", {
       userId: user.id,
-      fileCount: fileKeys.length,
+      fileCount: deletableFileKeys.length,
+      retainedCount: retainedFileKeys.length,
       durationMs: Math.max(0, Date.now() - startedAt),
     });
-    res.json({ deleted: fileKeys.length });
+    res.json({
+      deleted: deletableFileKeys.length,
+      ...(retainedFileKeys.length ? { retainedFileKeys } : {}),
+    });
   }));
 
   router.post("/story/suggest-topics", asyncRoute(async (req, res) => {

@@ -114,6 +114,25 @@ describe("M3 故事会 REST 接口", () => {
     }));
   });
 
+  it("内容安全审核中的故事图片会保留而音频仍可释放", async () => {
+    const deps = dependencies({
+      findMediaCheckTaskByFile: vi.fn(async (_userId, fileKey) => fileKey.startsWith("stories/7/") ? ({ status: "pending" } as never) : undefined),
+    });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/story/release-assets", {
+      fileKeys: ["stories/7/page-1.png", "stories-audio/7/page-1.mp3"],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      deleted: 1,
+      retainedFileKeys: ["stories/7/page-1.png"],
+    });
+    expect(deps.storageDelete).toHaveBeenCalledTimes(1);
+    expect(deps.storageDelete).toHaveBeenCalledWith("stories-audio/7/page-1.mp3");
+  });
+
   it("拒绝释放其他用户或非故事目录的文件", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);
