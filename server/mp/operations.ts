@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { createAiRequestMetadata, runWithAiRequestMetadata } from "../ai/requestTelemetry";
 
 export const MP_API_VERSION = "1.0.0";
 
@@ -8,6 +9,8 @@ export type MpRequestLog = {
   path: string;
   durationMs: number;
   errorCode: string;
+  provider: string | null;
+  model: string | null;
 };
 
 export type MpRequestLogSink = (entry: MpRequestLog) => void;
@@ -38,24 +41,29 @@ function defaultSink(entry: MpRequestLog): void {
 
 export function createMpRequestLogMiddleware(sink: MpRequestLogSink = defaultSink): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
-    const startedAt = Date.now();
-    let errorCode: string | undefined;
-    const originalJson = res.json.bind(res);
-    res.json = ((body: unknown) => {
-      errorCode = responseErrorCode(body) ?? errorCode;
-      return originalJson(body);
-    }) as Response["json"];
+    const aiMetadata = createAiRequestMetadata();
+    runWithAiRequestMetadata(aiMetadata, () => {
+      const startedAt = Date.now();
+      let errorCode: string | undefined;
+      const originalJson = res.json.bind(res);
+      res.json = ((body: unknown) => {
+        errorCode = responseErrorCode(body) ?? errorCode;
+        return originalJson(body);
+      }) as Response["json"];
 
-    res.once("finish", () => {
-      const candidate = (req as RequestWithOptionalUser).mpUser?.id;
-      sink({
-        userId: typeof candidate === "number" ? candidate : null,
-        path: req.originalUrl.split("?")[0] || req.path,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        errorCode: errorCode ?? (res.statusCode >= 400 ? `HTTP_${res.statusCode}` : "OK"),
+      res.once("finish", () => {
+        const candidate = (req as RequestWithOptionalUser).mpUser?.id;
+        sink({
+          userId: typeof candidate === "number" ? candidate : null,
+          path: req.originalUrl.split("?")[0] || req.path,
+          durationMs: Math.max(0, Date.now() - startedAt),
+          errorCode: errorCode ?? (res.statusCode >= 400 ? `HTTP_${res.statusCode}` : "OK"),
+          provider: aiMetadata.provider,
+          model: aiMetadata.model,
+        });
       });
+      next();
     });
-    next();
   };
 }
 

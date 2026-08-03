@@ -30,6 +30,11 @@ export const ENV = {
   moonshotModel: process.env.MOONSHOT_MODEL ?? "kimi-k2.6", // 日常任务（支持视觉）
   moonshotModelHeavy: process.env.MOONSHOT_MODEL_HEAVY ?? "kimi-k3", // 重任务（长上下文/深度推理）
 
+  // DeepSeek（纯文本快速任务）
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
+  deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
+  deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash",
+
   // 火山引擎方舟 即梦 Seedream（图像生成/编辑）
   arkApiKey: process.env.ARK_API_KEY ?? "",
   arkBaseUrl: process.env.ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3",
@@ -42,7 +47,8 @@ export const ENV = {
   dashscopeTtsModel: process.env.DASHSCOPE_TTS_MODEL ?? "qwen3-tts-flash",
   dashscopeAsrModel: process.env.DASHSCOPE_ASR_MODEL ?? "qwen3-asr-flash",
 
-  // 能力级供应商切换："auto"（有密钥则用新链路）| 明确指定 kimi/volc/ali/minimax/gemini/forge
+  // 能力级供应商切换："auto"（有密钥则用新链路）| 明确指定 deepseek/kimi/volc/ali/minimax/gemini/forge
+  aiTextFastProvider: process.env.AI_TEXT_FAST_PROVIDER ?? "auto",
   aiTextProvider: process.env.AI_TEXT_PROVIDER ?? "auto",
   aiImageProvider: process.env.AI_IMAGE_PROVIDER ?? "auto",
   aiTtsProvider: process.env.AI_TTS_PROVIDER ?? "auto",

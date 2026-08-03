@@ -12,6 +12,8 @@ import { ENV } from "../_core/env";
 import { callGeminiText, callGeminiImage, callGeminiTTS } from "../geminiService";
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { kimiChat, KimiMessage } from "./kimiClient";
+import { deepseekChat, DeepSeekMessage } from "./deepseekClient";
+import { recordAiRequestMetadata } from "./requestTelemetry";
 import {
   volcGenerateImage,
   isUnsupportedAdaptiveSizeError,
@@ -25,6 +27,7 @@ import { invokeMiniMaxText, invokeMiniMaxImage, invokeMiniMaxTTS } from "./minim
 // ─── 供应商选择（纯函数，便于测试）────────────────────────────────────────────
 
 export interface ProviderKeys {
+  deepseek?: boolean;
   moonshot: boolean;
   ark: boolean;
   dashscope: boolean;
@@ -35,6 +38,7 @@ export interface ProviderKeys {
 
 export function currentKeys(): ProviderKeys {
   return {
+    deepseek: !!ENV.deepseekApiKey,
     moonshot: !!ENV.moonshotApiKey,
     ark: !!ENV.arkApiKey,
     dashscope: !!ENV.dashscopeApiKey,
@@ -42,6 +46,17 @@ export function currentKeys(): ProviderKeys {
     gemini: !!ENV.geminiTextApiKey,
     forge: !!ENV.forgeApiUrl && !!ENV.forgeApiKey,
   };
+}
+
+export function pickFastTextProvider(
+  setting: string,
+  keys: ProviderKeys,
+): "deepseek" | "kimi" | "minimax" | "gemini" {
+  if (setting !== "auto") return setting as "deepseek" | "kimi" | "minimax" | "gemini";
+  if (keys.deepseek) return "deepseek";
+  if (keys.moonshot) return "kimi";
+  if (keys.minimax) return "minimax";
+  return "gemini";
 }
 
 export function pickTextProvider(setting: string, keys: ProviderKeys): "kimi" | "minimax" | "gemini" {
@@ -95,7 +110,26 @@ export async function aiChat(params: {
   json?: boolean;
   heavy?: boolean;
 }): Promise<string> {
-  const provider = pickTextProvider(ENV.aiTextProvider, currentKeys());
+  const provider = params.imageUrl
+    ? "kimi"
+    : pickFastTextProvider(ENV.aiTextFastProvider, currentKeys());
+
+  const textModel = provider === "deepseek"
+    ? ENV.deepseekModel
+    : provider === "kimi"
+      ? (params.heavy ? ENV.moonshotModelHeavy : ENV.moonshotModel)
+      : provider === "minimax"
+        ? "MiniMax-M2.5-highspeed"
+        : ENV.geminiTextModel;
+  recordAiRequestMetadata(provider, textModel);
+
+  if (provider === "deepseek") {
+    const messages: DeepSeekMessage[] = [
+      { role: "system", text: params.systemPrompt },
+      { role: "user", text: params.userPrompt },
+    ];
+    return deepseekChat({ messages, json: params.json });
+  }
 
   if (provider === "kimi") {
     const messages: KimiMessage[] = [{ role: "system", text: params.systemPrompt }];
@@ -139,7 +173,25 @@ export async function aiChatMulti(params: {
   imageUrl?: string;
   heavy?: boolean;
 }): Promise<string> {
-  const provider = pickTextProvider(ENV.aiTextProvider, currentKeys());
+  const provider = params.imageUrl
+    ? "kimi"
+    : pickFastTextProvider(ENV.aiTextFastProvider, currentKeys());
+
+  const textModel = provider === "deepseek"
+    ? ENV.deepseekModel
+    : provider === "kimi"
+      ? (params.heavy ? ENV.moonshotModelHeavy : ENV.moonshotModel)
+      : provider === "minimax"
+        ? "MiniMax-M2.5-highspeed"
+        : ENV.geminiTextModel;
+  recordAiRequestMetadata(provider, textModel);
+
+  if (provider === "deepseek") {
+    const messages: DeepSeekMessage[] = [{ role: "system", text: params.systemPrompt }];
+    for (const message of params.history) messages.push({ role: message.role, text: message.content });
+    messages.push({ role: "user", text: params.message });
+    return deepseekChat({ messages });
+  }
 
   if (provider === "kimi") {
     const messages: KimiMessage[] = [{ role: "system", text: params.systemPrompt }];
@@ -190,12 +242,15 @@ export async function aiGenerateImage(params: {
   const provider = pickImageProvider(ENV.aiImageProvider, currentKeys());
 
   if (provider === "volc") {
+    recordAiRequestMetadata("volc", ENV.arkImageModel);
     return volcGenerateImage({ prompt: params.prompt, aspectRatio: params.aspectRatio });
   }
   if (provider === "minimax") {
+    recordAiRequestMetadata("minimax", "image-01");
     return invokeMiniMaxImage({ prompt: params.prompt, aspectRatio: params.aspectRatio });
   }
   // gemini 遗留链路
+  recordAiRequestMetadata("gemini", ENV.geminiImageModel);
   const dataUrl = await callGeminiImage({
     parts: [{ text: params.prompt }],
     aspectRatio: params.aspectRatio,
@@ -211,6 +266,7 @@ export async function aiEditImage(params: {
   const provider = pickImageProvider(ENV.aiImageProvider, currentKeys());
 
   if (provider === "volc") {
+    recordAiRequestMetadata("volc", ENV.arkImageModel);
     try {
       // Seedream 4 使用 2K 分辨率档时会依据参考图自适应画布比例。
       return await volcGenerateImage({ prompt: params.prompt, imageUrls: [params.imageUrl], size: "2K" });
@@ -228,6 +284,7 @@ export async function aiEditImage(params: {
     }
   }
   // minimax image-01 不支持图生图编辑，降级到 gemini
+  recordAiRequestMetadata("gemini", ENV.geminiImageModel);
   const { base64, mimeType } = await fetchAsDataUrl(params.imageUrl);
   const dataUrl = await callGeminiImage({
     parts: [{ inlineData: { data: base64, mimeType } }, { text: params.prompt }],
@@ -244,8 +301,15 @@ export async function aiTTS(
 ): Promise<{ audioData: string; audioMime: string }> {
   const provider = pickTtsProvider(ENV.aiTtsProvider, currentKeys());
 
-  if (provider === "ali") return dashscopeTTS(text, voiceType);
-  if (provider === "minimax") return invokeMiniMaxTTS(text, voiceType);
+  if (provider === "ali") {
+    recordAiRequestMetadata("ali", ENV.dashscopeTtsModel);
+    return dashscopeTTS(text, voiceType);
+  }
+  if (provider === "minimax") {
+    recordAiRequestMetadata("minimax", "speech-02-hd");
+    return invokeMiniMaxTTS(text, voiceType);
+  }
+  recordAiRequestMetadata("gemini", ENV.geminiTtsModel);
   return callGeminiTTS(text, voiceType);
 }
 
@@ -254,10 +318,12 @@ export async function aiASR(audioUrl: string, language = "zh"): Promise<{ text: 
   const provider = pickAsrProvider(ENV.aiAsrProvider, currentKeys());
 
   if (provider === "ali") {
+    recordAiRequestMetadata("ali", ENV.dashscopeAsrModel);
     const text = await dashscopeASR(audioUrl);
     return { text };
   }
   // Manus Forge Whisper 遗留链路
+  recordAiRequestMetadata("forge", "whisper");
   const result = await transcribeAudio({ audioUrl, language });
   if ("error" in result) throw new Error(result.error);
   return { text: result.text };

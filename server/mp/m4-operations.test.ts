@@ -1,4 +1,6 @@
 import express, { type RequestHandler } from "express";
+import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createMpIdempotencyMiddleware,
@@ -52,10 +54,38 @@ describe("M4 小程序运维接口", () => {
     });
     expect(response.status).toBe(422);
     await vi.waitFor(() => expect(logs).toHaveLength(1));
-    expect(logs[0]).toMatchObject({ userId: 42, path: "/api/mp/chat", errorCode: "CONTENT_REJECTED" });
+    expect(logs[0]).toMatchObject({
+      userId: 42,
+      path: "/api/mp/chat",
+      errorCode: "CONTENT_REJECTED",
+      provider: null,
+      model: null,
+    });
     expect(logs[0].durationMs).toBeGreaterThanOrEqual(0);
-    expect(Object.keys(logs[0]).sort()).toEqual(["durationMs", "errorCode", "path", "userId"]);
+    expect(Object.keys(logs[0]).sort()).toEqual(["durationMs", "errorCode", "model", "path", "provider", "userId"]);
     expect(JSON.stringify(logs)).not.toContain(secretInput);
+  });
+
+  it("同一条 MP 请求日志记录实际 AI provider 与模型但不记录输入", async () => {
+    const telemetryPath = new URL("../ai/requestTelemetry.ts", import.meta.url);
+    expect(existsSync(telemetryPath)).toBe(true);
+    if (!existsSync(telemetryPath)) return;
+    const telemetry = await import(pathToFileURL(telemetryPath.pathname).href);
+    expect(telemetry.recordAiRequestMetadata).toBeTypeOf("function");
+
+    const logs: MpRequestLog[] = [];
+    const app = express();
+    app.use(express.json());
+    app.use("/api/mp", createMpRequestLogMiddleware((entry) => logs.push(entry)));
+    app.post("/api/mp/story/suggest-topics", ((req, res) => {
+      (req as typeof req & { mpUser: { id: number } }).mpUser = { id: 7 };
+      telemetry.recordAiRequestMetadata("deepseek", "deepseek-v4-flash");
+      res.json({ topics: [] });
+    }) as RequestHandler);
+
+    await fetch(`${await listen(app)}/story/suggest-topics`, { method: "POST" });
+    await vi.waitFor(() => expect(logs).toHaveLength(1));
+    expect(logs[0]).toMatchObject({ provider: "deepseek", model: "deepseek-v4-flash" });
   });
 
   it("识别网关和网络层超时错误", () => {
