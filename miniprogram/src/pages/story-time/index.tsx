@@ -23,6 +23,7 @@ const STORY_VOICES = [
   { id: "gentle", name: "温柔女声", emoji: "👩" },
   { id: "steady", name: "沉稳讲述", emoji: "👨" },
   { id: "dialect_sichuan", name: "四川话", emoji: "🌶️" },
+  { id: "dialect_shanghai", name: "上海话", emoji: "🏙️" },
   { id: "dialect_cantonese", name: "粤语", emoji: "🌺" },
 ] as const;
 

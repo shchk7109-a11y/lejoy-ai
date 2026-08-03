@@ -35,6 +35,8 @@ describe("M3 小程序页面契约", () => {
     }
     expect(page).toContain("VoiceInput");
     expect(page).toContain("四川话");
+    expect(page).toContain("上海话");
+    expect(page).toContain('id: "dialect_shanghai"');
     expect(page).toContain("粤语");
     expect(player).toContain("createInnerAudioContext");
     expect(page).toContain("pageNumber");
