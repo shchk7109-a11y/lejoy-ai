@@ -19,9 +19,11 @@ describe("生产小程序构建门禁", () => {
   it("生产构建固定注入 API 地址并在构建后运行产物校验", () => {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 
+    expect(packageJson.scripts["build:weapp"]).toBe("pnpm run build:weapp:prod");
     expect(packageJson.scripts["build:weapp:prod"]).toBe(
       "TARO_APP_API_BASE_URL=https://api.hxzhineng.xyz taro build --type weapp && node scripts/verify-production-build.mjs",
     );
+    expect(packageJson.scripts["build:weapp:local"]).toBe("taro build --type weapp");
   });
 
   it("仅包含生产 API 地址的产物通过校验", () => {
