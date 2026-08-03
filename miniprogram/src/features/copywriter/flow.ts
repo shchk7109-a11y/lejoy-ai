@@ -18,21 +18,31 @@ export const initialCopywriterFlow: CopywriterFlow = {
   canGenerate: false,
 };
 
+export function canGenerateCopywriter(
+  state: Pick<CopywriterFlow, "scenario" | "relationship" | "tone">,
+): boolean {
+  return Boolean(state.scenario.trim() && state.relationship.trim() && state.tone.trim());
+}
+
+function withGenerationEligibility(state: CopywriterFlow): CopywriterFlow {
+  return { ...state, canGenerate: canGenerateCopywriter(state) };
+}
+
 export function advanceCopywriterFlow(state: CopywriterFlow, answer: string): CopywriterFlow {
   if (state.step === "scenario") {
-    return { ...state, scenario: answer, step: "relationship" };
-  }
-  if (state.step === "relationship") {
-    return { ...state, relationship: answer, step: "tone" };
+    return withGenerationEligibility({ ...state, scenario: answer, step: "tone" });
   }
   if (state.step === "tone") {
-    return { ...state, tone: answer, step: "customContext", canGenerate: Boolean(answer) };
+    return withGenerationEligibility({ ...state, tone: answer, step: "relationship" });
   }
-  return { ...state, customContext: answer };
+  if (state.step === "relationship") {
+    return withGenerationEligibility({ ...state, relationship: answer, step: "customContext" });
+  }
+  return withGenerationEligibility({ ...state, customContext: answer });
 }
 
 export function setCopywriterContext(state: CopywriterFlow, customContext: string): CopywriterFlow {
-  return { ...state, customContext };
+  return withGenerationEligibility({ ...state, customContext });
 }
 
 export function resetCopywriterFlow(_state: CopywriterFlow): CopywriterFlow {

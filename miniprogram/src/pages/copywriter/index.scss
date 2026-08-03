@@ -90,6 +90,16 @@
   width: 100%;
 }
 
+.guide-panel__validation {
+  display: block;
+  margin-top: 20rpx;
+  color: $color-danger;
+  font-size: $font-button;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .result-panel__tip {
   display: block;
   margin: 16rpx 0 34rpx;

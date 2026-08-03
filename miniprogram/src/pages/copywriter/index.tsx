@@ -8,6 +8,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { VoiceInput } from "../../components/VoiceInput";
 import {
   advanceCopywriterFlow,
+  canGenerateCopywriter,
   initialCopywriterFlow,
   resetCopywriterFlow,
   setCopywriterContext,
@@ -23,15 +24,15 @@ const questions: Record<Exclude<CopywriterStep, "customContext">, { title: strin
     subtitle: "第 1 步，共 4 步",
     options: ["节日祝福", "生日寿辰", "发朋友圈", "日常关怀", "安慰鼓励", "感谢致意", "思念问候", "长辈祝寿"],
   },
-  relationship: {
-    title: "这段话想送给谁？",
-    subtitle: "第 2 步，共 4 步",
-    options: ["朋友", "家人", "长辈", "晚辈", "伴侣", "同事"],
-  },
   tone: {
     title: "希望是什么语气？",
-    subtitle: "第 3 步，共 4 步",
+    subtitle: "第 2 步，共 4 步",
     options: ["温暖亲切", "幽默调侃", "文采飞扬", "诗歌赋词", "散文随笔", "人生感悟", "庄重得体"],
+  },
+  relationship: {
+    title: "这段话想送给谁？",
+    subtitle: "第 3 步，共 4 步",
+    options: ["朋友", "家人", "长辈", "晚辈", "伴侣", "同事"],
   },
 };
 
@@ -39,13 +40,22 @@ export default function CopywriterPage() {
   const [flow, setFlow] = useState(initialCopywriterFlow);
   const [wishes, setWishes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showEligibilityHint, setShowEligibilityHint] = useState(false);
   const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
   const question = flow.step === "customContext" ? undefined : questions[flow.step];
   const selected = useMemo(() => flow[flow.step], [flow]);
+  const canGenerate = canGenerateCopywriter(flow);
 
   function selectOption(option: string) {
+    setShowEligibilityHint(false);
     setFlow((current) => advanceCopywriterFlow(current, option));
+  }
+
+  function showIncompleteSelectionHint() {
+    if (canGenerate) return;
+    setShowEligibilityHint(true);
+    void Taro.showToast({ title: "请先完成前面的选择", icon: "none", duration: 3000 });
   }
 
   async function generate(
@@ -57,7 +67,7 @@ export default function CopywriterPage() {
       customContext: flow.customContext.trim() || undefined,
     },
   ) {
-    if (!flow.canGenerate || loading || operationLockRef.current) return;
+    if (!canGenerateCopywriter(flow) || loading || operationLockRef.current) return;
     operationLockRef.current = true;
     setLoading(true);
     try {
@@ -126,10 +136,13 @@ export default function CopywriterPage() {
             </>
           ) : null}
           {flow.step === "customContext" ? (
-            <View className="guide-panel__action">
-              <Button block size="xlarge" type="primary" disabled={!flow.canGenerate} loading={loading} onClick={() => void generate()}>
+            <View className="guide-panel__action" onClick={!canGenerate ? showIncompleteSelectionHint : undefined}>
+              <Button block size="xlarge" type="primary" disabled={!canGenerate} loading={loading} onClick={() => void generate()}>
                 生成 3 条暖心文案
               </Button>
+              {showEligibilityHint && !canGenerate ? (
+                <Text className="guide-panel__validation">请先完成前面的选择</Text>
+              ) : null}
             </View>
           ) : null}
         </View>

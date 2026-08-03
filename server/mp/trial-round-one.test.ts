@@ -60,4 +60,15 @@ describe("试用第一轮修复", () => {
     expect(appStyles).not.toContain(".nut-button--xlarge");
     expect(copywriterStyles).toMatch(/\.guide-panel__action\s+\.nut-button\s*\{[^}]*width:\s*100%/s);
   });
+
+  it("生成资格由三个必填值派生，异常禁用态点击后显示大字提示", () => {
+    const page = mini("src/pages/copywriter/index.tsx");
+    const styles = mini("src/pages/copywriter/index.scss");
+
+    expect(page).toContain("canGenerateCopywriter(flow)");
+    expect(page).toContain("disabled={!canGenerate}");
+    expect(page).toContain("请先完成前面的选择");
+    expect(page).toContain("guide-panel__validation");
+    expect(styles).toMatch(/\.guide-panel__validation\s*\{[^}]*font-size:\s*\$font-button/s);
+  });
 });
