@@ -93,6 +93,39 @@ afterEach(async () => {
 });
 
 describe("M3 故事会 REST 接口", () => {
+  it("只释放当前用户自己的故事图片和音频", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/story/release-assets", {
+      fileKeys: ["stories/7/page-1.png", "stories-audio/7/page-1.mp3", "stories/7/page-1.png"],
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ deleted: 2 });
+    expect(deps.storageDelete).toHaveBeenCalledTimes(2);
+    expect(deps.storageDelete).toHaveBeenCalledWith("stories/7/page-1.png");
+    expect(deps.storageDelete).toHaveBeenCalledWith("stories-audio/7/page-1.mp3");
+    expect(info).toHaveBeenCalledWith("[story.release-assets]", expect.objectContaining({
+      userId: 7,
+      fileCount: 2,
+      durationMs: expect.any(Number),
+    }));
+  });
+
+  it("拒绝释放其他用户或非故事目录的文件", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+
+    const otherUser = await post(baseUrl, "/story/release-assets", { fileKeys: ["stories/8/page-1.png"] });
+    const unrelated = await post(baseUrl, "/story/release-assets", { fileKeys: ["uploads/7/page-1.png"] });
+
+    expect(otherUser.status).toBe(400);
+    expect(unrelated.status).toBe(400);
+    expect(deps.storageDelete).not.toHaveBeenCalled();
+  });
+
   it("推荐四个题材且不扣积分", async () => {
     const deps = dependencies();
     const baseUrl = await startApp(deps);

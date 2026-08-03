@@ -130,6 +130,29 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     return deps.storageGet(fileKey);
   };
 
+  router.post("/story/release-assets", asyncRoute(async (req, res) => {
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const rawFileKeys = req.body?.fileKeys;
+    if (!Array.isArray(rawFileKeys) || rawFileKeys.length < 1 || rawFileKeys.length > 16) {
+      badRequest(res, "故事资源列表无效");
+      return;
+    }
+    const ownedStoryFile = new RegExp(`^(?:stories|stories-audio)/${user.id}/[A-Za-z0-9][A-Za-z0-9._-]*$`);
+    const fileKeys = Array.from(new Set(rawFileKeys.map(nonEmpty)));
+    if (fileKeys.length < 1 || fileKeys.some((fileKey) => !ownedStoryFile.test(fileKey))) {
+      badRequest(res, "只能释放当前用户自己的故事资源");
+      return;
+    }
+    const startedAt = Date.now();
+    await Promise.all(fileKeys.map((fileKey) => deps.storageDelete(fileKey)));
+    console.info("[story.release-assets]", {
+      userId: user.id,
+      fileCount: fileKeys.length,
+      durationMs: Math.max(0, Date.now() - startedAt),
+    });
+    res.json({ deleted: fileKeys.length });
+  }));
+
   router.post("/story/suggest-topics", asyncRoute(async (req, res) => {
     const theme = nonEmpty(req.body?.theme);
     const childName = nonEmpty(req.body?.childName);

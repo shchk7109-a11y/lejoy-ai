@@ -45,7 +45,15 @@ export type PhotoEditPreset = "一键去路人" | "清晨阳光" | "日落余晖
 export type ArtStyleName = string;
 export type ArtStyleOption = { name: ArtStyleName; emoji: string; description: string };
 export type StoryTopic = { title: string; description: string; protagonist: string };
-export type StoryPage = { pageNumber: number; text: string; imagePrompt: string; imageUrl?: string; audioUrl?: string };
+export type StoryPage = {
+  pageNumber: number;
+  text: string;
+  imagePrompt: string;
+  imageUrl?: string;
+  imageFileKey?: string;
+  audioUrl?: string;
+  audioFileKey?: string;
+};
 export type LifeResult = {
   title: string;
   description: string;
@@ -139,6 +147,8 @@ export const mpApi = {
     }),
   generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }, operationId?: string) =>
     request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never", operationId }),
+  releaseStoryAssets: (fileKeys: string[]) =>
+    request<{ deleted: number }>("/api/mp/story/release-assets", { method: "POST", data: { fileKeys }, retry: "never" }),
   getRecipe: (foodName: string, operationId?: string) =>
     request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never", operationId }),
   identifyPlant: (sourceFileKey: string, operationId?: string) =>
