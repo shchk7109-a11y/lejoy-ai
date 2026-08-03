@@ -133,7 +133,7 @@ export const mpApi = {
     request<{ imageUrl: string; fileKey: string; securityStatus: MediaSecurityStatus; credits: number }>("/api/mp/silverlens/transform", { method: "POST", data, retry: "never", operationId }),
   transcribeAudio: (fileKey: string) =>
     request<{ text: string }>("/api/mp/stt/transcribe", { method: "POST", data: { fileKey, language: "zh" }, retry: "never" }),
-  suggestStoryTopics: (data: { theme: string; childName?: string; age?: number; customProtagonist?: string }, operationId?: string) =>
+  suggestStoryTopics: (data: { theme: string; childName?: string; age?: number; customProtagonist?: string; excludeTitles?: string[] }, operationId?: string) =>
     request<{ topics: StoryTopic[] }>("/api/mp/story/suggest-topics", { method: "POST", data, retry: "never", operationId }),
   generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }, operationId?: string) =>
     request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data, retry: "never", operationId }),

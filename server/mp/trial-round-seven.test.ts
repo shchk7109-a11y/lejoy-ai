@@ -146,4 +146,16 @@ describe("试用第七轮故事会本机书架", () => {
     expect(story.slice(structureReady, story.indexOf("illustrate:", structureReady))).toContain("dismissError();");
     expect(story).toContain("runStoryStructureThenIllustrate");
   });
+
+  it("换一批时携带当前会话全部已展示题材且最多四十项", () => {
+    const story = read("miniprogram/src/pages/story-time/index.tsx");
+    const api = read("miniprogram/src/services/api.ts");
+    expect(story).toContain("shownTopicTitlesRef");
+    expect(story).toContain("excludeTitles: shownTopicTitlesRef.current.slice(-40)");
+    expect(story).toContain("rememberShownTopics(result.topics)");
+    expect(api).toContain("excludeTitles?: string[]");
+
+    const restartBlock = story.slice(story.indexOf("function restart()"), story.indexOf("const allImagesReady"));
+    expect(restartBlock).not.toContain("shownTopicTitlesRef.current = []");
+  });
 });

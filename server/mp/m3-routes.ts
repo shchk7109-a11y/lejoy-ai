@@ -86,6 +86,14 @@ function nonEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function topicExclusions(value: unknown): string[] | undefined {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 40) return undefined;
+  const titles = value.map(nonEmpty);
+  if (titles.some((title) => !title || title.length > 20)) return undefined;
+  return titles;
+}
+
 export function createM3Router(deps: M3Dependencies, authenticate: RequestHandler): Router {
   const router = Router();
   router.use(authenticate);
@@ -174,12 +182,17 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
     const childName = nonEmpty(req.body?.childName);
     const age = Number(req.body?.age ?? 6);
     const customProtagonist = nonEmpty(req.body?.customProtagonist) || undefined;
+    const excludeTitles = topicExclusions(req.body?.excludeTitles);
+    if (excludeTitles === undefined) {
+      badRequest(res, "历史题材列表无效");
+      return;
+    }
     if (!theme || !Number.isInteger(age) || age < 1 || age > 12) {
       badRequest(res, "请选择故事主题并填写 1 至 12 岁的年龄");
       return;
     }
     const character = childName ? `名叫${childName}的${age}岁孩子` : `一个${age}岁的小朋友`;
-    const topics = await deps.suggestStoryTopics({ theme, character, customProtagonist });
+    const topics = await deps.suggestStoryTopics({ theme, character, customProtagonist, excludeTitles });
     res.json({ topics: topics.slice(0, 4) });
   }));
 

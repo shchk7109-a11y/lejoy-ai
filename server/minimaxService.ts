@@ -17,6 +17,24 @@ const STORY_STYLE_GUIDANCE: Record<string, string> = {
   "超级英雄": "正义英雄团队、守护家园、勇气与责任",
 };
 
+export type StoryTopic = { title: string; description: string; protagonist: string };
+
+export function normalizeStoryTopicTitle(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s，。！？、；：,.!?;:'"“”‘’（）()《》【】\[\]—…-]+/g, "");
+}
+
+export function filterFreshStoryTopics(topics: StoryTopic[], excludeTitles: string[]): StoryTopic[] {
+  const seen = new Set(excludeTitles.map(normalizeStoryTopicTitle).filter(Boolean));
+  const fresh: StoryTopic[] = [];
+  for (const topic of topics) {
+    const key = normalizeStoryTopicTitle(topic.title);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    fresh.push(topic);
+  }
+  return fresh.slice(0, 4);
+}
+
 function describeStoryStyle(theme: string): string {
   const guidance = STORY_STYLE_GUIDANCE[theme];
   return guidance ? `${theme}（${guidance}）` : theme;
@@ -67,11 +85,16 @@ export async function suggestStoryTopics(params: {
   theme: string;
   character: string;
   customProtagonist?: string;
-}): Promise<Array<{ title: string; description: string; protagonist: string }>> {
+  excludeTitles?: string[];
+}): Promise<StoryTopic[]> {
+  const excludeTitles = params.excludeTitles ?? [];
   const protagonistHint = params.customProtagonist
     ? `，主角必须是「${params.customProtagonist}」（可以是超级英雄、动漫角色等，保持其原有特征但适合儿童）`
     : ``;
-  const prompt = `你是儿童故事创作专家。请为${params.character}推荐4个「${describeStoryStyle(params.theme)}」风格的故事题材${protagonistHint}。每个题材要有趣、有教育意义、适合孩子。返回JSON对象，topics 必须是包含4项的数组，每项包含：title（题材标题，10字内）、description（题材简介，30字内）、protagonist（主角名字${params.customProtagonist ? `，固定为「${params.customProtagonist}」` : `，如小明、小花、阿宝等随机有趣的名字`}）。格式：{"topics":[{"title":"...","description":"...","protagonist":"..."}]}`;
+  const exclusionHint = excludeTitles.length
+    ? `以下标题已经展示过，严禁重复或仅改空格、标点：${excludeTitles.map((title) => `「${title}」`).join("、")}。`
+    : "";
+  const prompt = `你是儿童故事创作专家。请为${params.character}推荐8个互不重复的「${describeStoryStyle(params.theme)}」风格故事题材${protagonistHint}。${exclusionHint}每个题材要有趣、有教育意义、适合孩子。返回JSON对象，topics 必须是包含8项的数组，每项包含：title（题材标题，10字内）、description（题材简介，30字内）、protagonist（主角名字${params.customProtagonist ? `，固定为「${params.customProtagonist}」` : `，如小明、小花、阿宝等随机有趣的名字`}）。格式：{"topics":[{"title":"...","description":"...","protagonist":"..."}]}`;
   const raw = await aiChat({
     systemPrompt: "你是儿童故事创作专家，只返回JSON格式内容，不要有任何多余的文字。",
     userPrompt: prompt,
@@ -79,15 +102,16 @@ export async function suggestStoryTopics(params: {
   });
   const parsed = parseModelJson<{ topics?: unknown }>(raw);
   if (!Array.isArray(parsed.topics)) throw new Error("AI 未返回有效题材列表");
-  const topics = parsed.topics.filter((topic): topic is { title: string; description: string; protagonist: string } => (
+  const topics = parsed.topics.filter((topic): topic is StoryTopic => (
     typeof topic === "object"
     && topic !== null
     && typeof (topic as Record<string, unknown>).title === "string"
     && typeof (topic as Record<string, unknown>).description === "string"
     && typeof (topic as Record<string, unknown>).protagonist === "string"
   ));
-  if (topics.length < 4) throw new Error("AI 未返回四个有效题材");
-  return topics.slice(0, 4);
+  const freshTopics = filterFreshStoryTopics(topics, excludeTitles);
+  if (freshTopics.length < 4) throw new Error("AI 未返回四个全新题材");
+  return freshTopics;
 }
 
 /**

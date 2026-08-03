@@ -152,6 +152,7 @@ describe("M3 故事会 REST 接口", () => {
       theme: "勇气成长",
       childName: "乐乐",
       age: 6,
+      excludeTitles: ["森林探险", "月球旅行"],
     });
 
     expect(response.status).toBe(200);
@@ -161,8 +162,33 @@ describe("M3 故事会 REST 接口", () => {
       theme: "勇气成长",
       character: "名叫乐乐的6岁孩子",
       customProtagonist: undefined,
+      excludeTitles: ["森林探险", "月球旅行"],
     });
     expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
+
+  it("拒绝无效的历史题材排除列表", async () => {
+    const deps = dependencies();
+    const baseUrl = await startApp(deps);
+    const invalidLists = [
+      Array.from({ length: 41 }, (_, index) => `题材${index}`),
+      ["森林探险", 123],
+      ["题".repeat(21)],
+    ];
+
+    for (const excludeTitles of invalidLists) {
+      const response = await post(baseUrl, "/story/suggest-topics", {
+        theme: "勇气成长",
+        childName: "乐乐",
+        age: 6,
+        excludeTitles,
+      });
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "BAD_REQUEST", message: "历史题材列表无效" },
+      });
+    }
+    expect(deps.suggestStoryTopics).not.toHaveBeenCalled();
   });
 
   it("生成严格四页故事结构并扣 1 积分", async () => {

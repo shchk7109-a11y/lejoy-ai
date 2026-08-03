@@ -9,8 +9,10 @@ vi.mock("./ai/gateway", () => ({
 
 import {
   analyzeFoodNutrition,
+  filterFreshStoryTopics,
   generateStoryText,
   identifyPlant,
+  normalizeStoryTopicTitle,
   queryHealthInfo,
   suggestStoryTopics,
 } from "./minimaxService";
@@ -18,6 +20,74 @@ import {
 describe("Kimi JSON 对象协议", () => {
   beforeEach(() => {
     aiChatMock.mockReset();
+  });
+
+  it("题材标题忽略空格、标点和大小写后比较", () => {
+    expect(normalizeStoryTopicTitle(" 森林 探险！ ")).toBe("森林探险");
+    expect(normalizeStoryTopicTitle("Moon Trip！")).toBe("moontrip");
+  });
+
+  it("排除会话历史题材并去除本批重复", () => {
+    const candidates = [
+      { title: "森林 探险！", description: "重复历史", protagonist: "小熊" },
+      { title: "海底寻宝", description: "第一次", protagonist: "小鱼" },
+      { title: "海底寻宝！", description: "本批重复", protagonist: "小鱼" },
+      { title: "月球旅行", description: "新题材", protagonist: "小兔" },
+      { title: "会飞的书包", description: "新题材", protagonist: "乐乐" },
+      { title: "勇敢的小鹿", description: "新题材", protagonist: "小鹿" },
+    ];
+
+    expect(filterFreshStoryTopics(candidates, ["森林探险"]).map((item) => item.title)).toEqual([
+      "海底寻宝",
+      "月球旅行",
+      "会飞的书包",
+      "勇敢的小鹿",
+    ]);
+  });
+
+  it("题材推荐一次生成八个候选并排除会话历史", async () => {
+    const topics = [
+      { title: "森林 探险！", description: "重复历史", protagonist: "小熊" },
+      { title: "海底寻宝", description: "第一次", protagonist: "小鱼" },
+      { title: "海底寻宝！", description: "本批重复", protagonist: "小鱼" },
+      { title: "月球旅行", description: "新题材", protagonist: "小兔" },
+      { title: "会飞的书包", description: "新题材", protagonist: "乐乐" },
+      { title: "勇敢的小鹿", description: "新题材", protagonist: "小鹿" },
+      { title: "星星邮局", description: "候补题材", protagonist: "小猫" },
+      { title: "云朵列车", description: "候补题材", protagonist: "朵朵" },
+    ];
+    aiChatMock.mockResolvedValue(JSON.stringify({ topics }));
+
+    await expect(suggestStoryTopics({
+      theme: "温馨治愈",
+      character: "一个6岁的小朋友",
+      excludeTitles: ["森林探险"],
+    })).resolves.toEqual([
+      topics[1], topics[3], topics[4], topics[5],
+    ]);
+
+    const prompt = aiChatMock.mock.calls[0][0].userPrompt as string;
+    expect(prompt).toContain("推荐8个");
+    expect(prompt).toContain("森林探险");
+    expect(prompt).toContain("严禁重复");
+  });
+
+  it("过滤后不足四个全新题材时明确失败", async () => {
+    aiChatMock.mockResolvedValue(JSON.stringify({
+      topics: [
+        { title: "森林探险！", description: "重复历史", protagonist: "小熊" },
+        { title: "月球旅行", description: "新题材", protagonist: "小兔" },
+        { title: "会飞的书包", description: "新题材", protagonist: "乐乐" },
+        { title: "勇敢的小鹿", description: "新题材", protagonist: "小鹿" },
+      ],
+    }));
+
+    await expect(suggestStoryTopics({
+      theme: "科幻探险",
+      character: "一个6岁的小朋友",
+      excludeTitles: ["森林探险"],
+    })).rejects.toThrow("AI 未返回四个全新题材");
+    expect(aiChatMock).toHaveBeenCalledTimes(1);
   });
 
   it("故事题材要求并解析 topics 对象，不能要求裸数组", async () => {

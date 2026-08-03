@@ -56,6 +56,7 @@ export default function StoryTimePage() {
   const speechGeneratingRef = useRef(false);
   const imageGeneratingRef = useRef(false);
   const storyImageOperationIdsRef = useRef<Record<number, string>>({});
+  const shownTopicTitlesRef = useRef<string[]>([]);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   useEffect(() => {
@@ -65,6 +66,13 @@ export default function StoryTimePage() {
   function replacePages(nextPages: StoryPage[]): void {
     pagesRef.current = nextPages;
     setPages(nextPages);
+  }
+
+  function rememberShownTopics(nextTopics: StoryTopic[]): void {
+    shownTopicTitlesRef.current = [
+      ...shownTopicTitlesRef.current,
+      ...nextTopics.map((topic) => topic.title),
+    ].slice(-40);
   }
 
   function savePagePatch(pageNumber: number, patch: Partial<StoryPage>): StoryPage[] {
@@ -96,7 +104,9 @@ export default function StoryTimePage() {
         theme,
         childName: childName.trim() || undefined,
         age: Number(age) || 6,
+        excludeTitles: shownTopicTitlesRef.current.slice(-40),
       }, operationId);
+      rememberShownTopics(result.topics);
       setTopics(result.topics);
       setStep("topics");
     } catch (error) {
