@@ -95,4 +95,21 @@ describe("Seedream 请求体", () => {
     });
     expect(axiosMocks.post.mock.calls[0][1].size).not.toBe("2048x2048");
   });
+
+  it("允许故事配图显式覆盖模型并使用 1K 尺寸", async () => {
+    axiosMocks.post.mockResolvedValue({
+      data: { data: [{ b64_json: Buffer.from("image").toString("base64") }] },
+    });
+
+    await volcGenerateImage({
+      prompt: "儿童绘本第一页",
+      model: "doubao-seedream-4-0-250828",
+      size: "1K",
+    });
+
+    expect(axiosMocks.post.mock.calls[0][1]).toMatchObject({
+      model: "doubao-seedream-4-0-250828",
+      size: "1K",
+    });
+  });
 });

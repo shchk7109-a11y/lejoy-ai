@@ -182,17 +182,29 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
     const user = (req as MpAuthenticatedRequest).mpUser;
-    const base64 = await deps.aiGenerateImage({
-      prompt: buildStoryImagePrompt(imagePrompt, pageNumber),
-      aspectRatio: "1:1",
-    });
-    const file = await deps.storagePut(
-      `stories/${user.id}/${deps.createFileId()}-p${pageNumber}.png`,
-      Buffer.from(base64, "base64"),
-      "image/png",
-    );
-    const securityStatus = await submitStoredImage(file, user);
-    res.json({ imageUrl: file.url, fileKey: file.key, pageNumber, securityStatus });
+    const startedAt = Date.now();
+    let success = false;
+    try {
+      const base64 = await deps.aiGenerateImage({
+        prompt: buildStoryImagePrompt(imagePrompt, pageNumber),
+        aspectRatio: "1:1",
+        profile: "story",
+      });
+      const file = await deps.storagePut(
+        `stories/${user.id}/${deps.createFileId()}-p${pageNumber}.png`,
+        Buffer.from(base64, "base64"),
+        "image/png",
+      );
+      const securityStatus = await submitStoredImage(file, user);
+      success = true;
+      res.json({ imageUrl: file.url, fileKey: file.key, pageNumber, securityStatus });
+    } finally {
+      console.info("[story.page-image]", {
+        pageNumber,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        success,
+      });
+    }
   }));
 
   router.post("/story/page-speech", asyncRoute(async (req, res) => {

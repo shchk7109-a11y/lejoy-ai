@@ -37,6 +37,17 @@
   line-height: 1.5;
 }
 
+.generation-progress--inline {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  min-height: 300rpx;
+  margin: 24rpx 0 32rpx;
+  padding: 36rpx 28rpx;
+  border: 3rpx solid $color-border;
+  border-radius: $radius-card;
+}
+
 @keyframes generation-progress-spin {
   to { transform: rotate(360deg); }
 }

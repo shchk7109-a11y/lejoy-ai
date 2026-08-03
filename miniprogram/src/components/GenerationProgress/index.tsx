@@ -8,12 +8,14 @@ type GenerationProgressProps = {
   active: boolean;
   label: string;
   estimate?: string;
+  inline?: boolean;
 };
 
 export function GenerationProgress({
   active,
   label,
   estimate = "约需半分钟",
+  inline = false,
 }: GenerationProgressProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const activeRef = useRef(active);
@@ -50,7 +52,7 @@ export function GenerationProgress({
   if (!active) return null;
 
   return (
-    <View className="generation-progress" role="status" aria-live="polite">
+    <View className={`generation-progress ${inline ? "generation-progress--inline" : ""}`} role="status" aria-live="polite">
       <View className="generation-progress__spinner" />
       <Text className="generation-progress__title">
         {formatGenerationProgress(label, elapsedSeconds, estimate)}

@@ -1,4 +1,5 @@
 export const MP_REQUEST_TIMEOUT_MS = 90_000;
+export const MP_STORY_IMAGE_TIMEOUT_MS = 150_000;
 
 export type MpErrorKind =
   | "network"

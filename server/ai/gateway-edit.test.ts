@@ -8,6 +8,8 @@ vi.mock("../_core/env", () => ({
   ENV: {
     aiImageProvider: "volc",
     arkApiKey: "test-key",
+    arkImageModel: "default-image-model",
+    arkStoryImageModel: "story-image-model",
   },
 }));
 
@@ -22,7 +24,7 @@ vi.mock("./kimiClient", () => ({ kimiChat: vi.fn() }));
 vi.mock("./aliVoiceClient", () => ({ dashscopeTTS: vi.fn(), dashscopeASR: vi.fn() }));
 vi.mock("./minimaxClient", () => ({ invokeMiniMaxText: vi.fn(), invokeMiniMaxImage: vi.fn(), invokeMiniMaxTTS: vi.fn() }));
 
-import { aiEditImage } from "./gateway";
+import { aiEditImage, aiGenerateImage } from "./gateway";
 
 describe("Seedream 原图比例编辑", () => {
   beforeEach(() => {
@@ -64,5 +66,29 @@ describe("Seedream 原图比例编辑", () => {
     mocks.volcGenerateImage.mockRejectedValue(error);
     await expect(aiEditImage({ imageUrl: "https://cdn.example/photo.jpg", prompt: "保持构图" })).rejects.toBe(error);
     expect(mocks.volcGenerateImage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Seedream 故事配图参数", () => {
+  beforeEach(() => {
+    mocks.volcGenerateImage.mockReset();
+  });
+
+  it("故事页使用专用模型与 1K，普通生图不受影响", async () => {
+    mocks.volcGenerateImage.mockResolvedValue("image-base64");
+
+    await aiGenerateImage({ prompt: "儿童绘本第1页", aspectRatio: "1:1", profile: "story" });
+    await aiGenerateImage({ prompt: "普通图片", aspectRatio: "1:1" });
+
+    expect(mocks.volcGenerateImage).toHaveBeenNthCalledWith(1, {
+      prompt: "儿童绘本第1页",
+      aspectRatio: "1:1",
+      model: "story-image-model",
+      size: "1K",
+    });
+    expect(mocks.volcGenerateImage).toHaveBeenNthCalledWith(2, {
+      prompt: "普通图片",
+      aspectRatio: "1:1",
+    });
   });
 });

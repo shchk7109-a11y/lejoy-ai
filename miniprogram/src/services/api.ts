@@ -2,6 +2,7 @@ import Taro from "@tarojs/taro";
 import { clearSession, getToken } from "../store/auth";
 import {
   MP_REQUEST_TIMEOUT_MS,
+  MP_STORY_IMAGE_TIMEOUT_MS,
   MpApiError,
   normalizeApiError,
   shouldAutoRetry,
@@ -65,6 +66,7 @@ async function request<T>(path: string, options: {
   auth?: boolean;
   retry?: "safe" | "never";
   operationId?: string;
+  timeoutMs?: number;
 } = {}): Promise<T> {
   const token = getToken();
   const method = options.method ?? "GET";
@@ -76,7 +78,7 @@ async function request<T>(path: string, options: {
         url: `${API_BASE_URL}${path}`,
         method,
         data: options.data,
-        timeout: MP_REQUEST_TIMEOUT_MS,
+        timeout: options.timeoutMs ?? MP_REQUEST_TIMEOUT_MS,
         header: {
           "content-type": "application/json",
           ...(options.auth !== false && token ? { authorization: `Bearer ${token}` } : {}),
@@ -128,7 +130,13 @@ export const mpApi = {
   generateStoryStructure: (data: { theme: string; topic: string; childName?: string; age: number; protagonist?: string }, operationId?: string) =>
     request<{ title: string; pages: StoryPage[]; credits: number }>("/api/mp/story/structure", { method: "POST", data, retry: "never", operationId }),
   generateStoryPageImage: (data: { imagePrompt: string; pageNumber: number }, operationId?: string) =>
-    request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", { method: "POST", data, retry: "never", operationId }),
+    request<{ imageUrl: string; fileKey: string; pageNumber: number; securityStatus: MediaSecurityStatus }>("/api/mp/story/page-image", {
+      method: "POST",
+      data,
+      retry: "never",
+      operationId,
+      timeoutMs: MP_STORY_IMAGE_TIMEOUT_MS,
+    }),
   generateStoryPageSpeech: (data: { pageNumber: number; text: string; voiceType: string; isFirstPage: boolean; title?: string }, operationId?: string) =>
     request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never", operationId }),
   getRecipe: (foodName: string, operationId?: string) =>

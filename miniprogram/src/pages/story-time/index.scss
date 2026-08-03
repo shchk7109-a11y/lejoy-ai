@@ -27,7 +27,8 @@
 .story-card--playing { border-color: #2563eb; box-shadow: 0 0 0 8rpx rgba(37, 99, 235, .12); }
 .story-card__number { display: block; padding: 20rpx 26rpx; color: #1d4ed8; font-size: $font-secondary; font-weight: 800; }
 .story-card__image, .story-card__placeholder { width: 100%; height: 560rpx; }
-.story-card__placeholder { display: flex; align-items: center; justify-content: center; background: #eff6ff; color: #475569; }
+.story-card__placeholder { padding: 32rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #eff6ff; color: #475569; font-size: $font-body; }
+.story-card__retry { min-height: 108rpx; margin-top: 28rpx; font-size: 40rpx; }
 .story-card__text { display: block; padding: 28rpx; font-size: $font-body; line-height: 1.75; }
 .voice-grid { margin-bottom: 32rpx; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18rpx; }
 .voice-card { min-height: 108rpx; padding: 18rpx; display: flex; align-items: center; gap: 12rpx; border: 3rpx solid #bfdbfe; border-radius: 32rpx; background: #fff; font-size: $font-secondary; font-weight: 700; }

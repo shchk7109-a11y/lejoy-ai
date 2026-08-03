@@ -29,9 +29,11 @@ describe("M4 五模块统一错误态", () => {
     }
   });
 
-  it("故事配图聚合失败页，语音逐页保存且不整批重跑", () => {
+  it("故事配图逐页失败可单页重试，语音逐页保存且不整批重跑", () => {
     const content = mini("src/pages/story-time/index.tsx");
-    expect(content).toContain("retryStoryImages");
+    expect(content).toContain("generateStoryImages");
+    expect(content).toContain("runStoryImageQueue");
+    expect(content).toContain("retryStoryImagePage");
     expect(content).toContain("generateStorySpeeches");
     expect(content).toContain("voiceType: string");
     expect(content).not.toContain("const speeches = await Promise.all(pages.map");

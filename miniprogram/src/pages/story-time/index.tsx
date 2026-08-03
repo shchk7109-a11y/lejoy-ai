@@ -13,6 +13,7 @@ import {
   STORY_THEMES,
   TOPIC_REFRESH_COOLDOWN_MS,
 } from "../../features/story-time/flow";
+import { runStoryImageQueue, type StoryImagePlan } from "../../features/story-time/image-queue";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
@@ -26,7 +27,6 @@ const STORY_VOICES = [
 ] as const;
 
 type Step = "theme" | "child" | "topics" | "result";
-type StoryImagePlan = { page: StoryPage; operationId: string };
 type StorySpeechPlan = {
   pageNumber: number;
   operationId: string;
@@ -50,12 +50,15 @@ export default function StoryTimePage() {
   const [voiceType, setVoiceType] = useState("lively");
   const [busyMessage, setBusyMessage] = useState("");
   const [illustrating, setIllustrating] = useState(false);
+  const [activeImagePage, setActiveImagePage] = useState<number>();
   const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
   const [playingPage, setPlayingPage] = useState<number>();
   const audioRef = useRef<ReturnType<typeof Taro.createInnerAudioContext> | null>(null);
   const operationLockRef = useRef(false);
   const pagesRef = useRef<StoryPage[]>([]);
   const speechGeneratingRef = useRef(false);
+  const imageGeneratingRef = useRef(false);
+  const storyImageOperationIdsRef = useRef<Record<number, string>>({});
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   useEffect(() => {
@@ -91,6 +94,14 @@ export default function StoryTimePage() {
       page.pageNumber === pageNumber ? { ...page, ...patch } : page
     )));
     return nextPages;
+  }
+
+  function getStoryImageOperationId(pageNumber: number): string {
+    const existing = storyImageOperationIdsRef.current[pageNumber];
+    if (existing) return existing;
+    const operationId = createOperationId(`story-image-${pageNumber}`);
+    storyImageOperationIdsRef.current[pageNumber] = operationId;
+    return operationId;
   }
 
   async function loadTopics(operationId = createOperationId("story-topics")) {
@@ -149,9 +160,11 @@ export default function StoryTimePage() {
       setStep("result");
       setBusyMessage("");
       setFailedImagePages([]);
-      await retryStoryImages(story.pages.map((page) => ({
-        page,
-        operationId: createOperationId(`story-image-${page.pageNumber}`),
+      storyImageOperationIdsRef.current = {};
+      await generateStoryImages(story.pages.map((page) => ({
+        pageNumber: page.pageNumber,
+        imagePrompt: page.imagePrompt,
+        operationId: getStoryImageOperationId(page.pageNumber),
       })));
     } catch (error) {
       showMpError(error, () => generateStory(topic, operationId));
@@ -227,31 +240,40 @@ export default function StoryTimePage() {
     audio.play();
   }
 
-  async function retryStoryImages(plans: StoryImagePlan[]): Promise<void> {
-    if (!plans.length) return;
+  async function generateStoryImages(plans: StoryImagePlan[]): Promise<void> {
+    if (!plans.length || imageGeneratingRef.current) return;
+    imageGeneratingRef.current = true;
     setIllustrating(true);
-    const failures: Array<StoryImagePlan & { error: unknown }> = [];
     try {
-      await Promise.all(plans.map(async (plan) => {
-        try {
-          const image = await mpApi.generateStoryPageImage({
-            imagePrompt: plan.page.imagePrompt,
-            pageNumber: plan.page.pageNumber,
-          }, plan.operationId);
-          savePagePatch(plan.page.pageNumber, { imageUrl: image.imageUrl });
-        } catch (error) {
-          failures.push({ ...plan, error });
-        }
-      }));
-      setFailedImagePages(failures.map((failure) => failure.page.pageNumber));
+      const failures = await runStoryImageQueue(plans, (plan) => mpApi.generateStoryPageImage({
+        imagePrompt: plan.imagePrompt,
+        pageNumber: plan.pageNumber,
+      }, plan.operationId), {
+        onStart: (plan) => setActiveImagePage(plan.pageNumber),
+        onSuccess: (plan, image) => {
+          savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl });
+          setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== plan.pageNumber));
+        },
+        onFailure: (plan) => setFailedImagePages((current) => (
+          current.includes(plan.pageNumber) ? current : [...current, plan.pageNumber]
+        )),
+      });
       if (failures.length) {
-        const retryPlans = failures.map(({ page, operationId }) => ({ page, operationId }));
-        showMpError(failures[0].error, () => retryStoryImages(retryPlans));
         await Taro.showToast({ title: `有 ${failures.length} 页配图未完成，可手动重试`, icon: "none", duration: 3000 });
       }
     } finally {
+      imageGeneratingRef.current = false;
       setIllustrating(false);
+      setActiveImagePage(undefined);
     }
+  }
+
+  function retryStoryImagePage(page: StoryPage): void {
+    void generateStoryImages([{
+      pageNumber: page.pageNumber,
+      imagePrompt: page.imagePrompt,
+      operationId: getStoryImageOperationId(page.pageNumber),
+    }]);
   }
 
   function restart() {
@@ -264,11 +286,16 @@ export default function StoryTimePage() {
     setTopicRefreshRemaining(0);
     setTitle("");
     replacePages([]);
+    storyImageOperationIdsRef.current = {};
+    imageGeneratingRef.current = false;
     setIllustrating(false);
+    setActiveImagePage(undefined);
     setFailedImagePages([]);
     setPlayingPage(undefined);
     dismissError();
   }
+
+  const allImagesReady = pages.length === 4 && pages.every((page) => Boolean(page.imageUrl));
 
   return (
     <View className="story-page">
@@ -361,33 +388,61 @@ export default function StoryTimePage() {
             <Text className="story-result__tip">
               {illustrating ? "四页文字已完成，正在逐页补图…" : failedImagePages.length ? `有 ${failedImagePages.length} 页配图未完成，请手动重试配图` : "共 4 页，文字和图片已准备好"}
             </Text>
+            <GenerationProgress
+              active={illustrating}
+              inline={true}
+              label={activeImagePage ? `正在画第 ${activeImagePage} 页（共 4 页）` : "正在准备第 1 页配图"}
+              estimate="每页约半分钟"
+            />
             {pages.map((page) => (
               <View key={page.pageNumber} className={`story-card ${playingPage === page.pageNumber ? "story-card--playing" : ""}`}>
                 <Text className="story-card__number">第 {page.pageNumber} 页</Text>
-                {page.imageUrl ? <Image className="story-card__image" src={page.imageUrl} mode="aspectFill" /> : <View className="story-card__placeholder"><Text>{failedImagePages.includes(page.pageNumber) ? "配图未完成" : "正在配图…"}</Text></View>}
+                {page.imageUrl ? (
+                  <Image className="story-card__image" src={page.imageUrl} mode="aspectFill" />
+                ) : (
+                  <View className="story-card__placeholder">
+                    <Text>{failedImagePages.includes(page.pageNumber) ? "这一页配图未完成" : activeImagePage === page.pageNumber ? "正在画这一页…" : "等待生成…"}</Text>
+                    {failedImagePages.includes(page.pageNumber) ? (
+                      <Button
+                        className="story-card__retry"
+                        block
+                        size="xlarge"
+                        type="primary"
+                        disabled={illustrating}
+                        onClick={() => retryStoryImagePage(page)}
+                      >
+                        重试这一页
+                      </Button>
+                    ) : null}
+                  </View>
+                )}
                 <Text className="story-card__text">{page.text}</Text>
               </View>
             ))}
-            <Text className="story-label">AI 合成语音 · 选择朗读声音</Text>
-            <View className="voice-grid">
-              {STORY_VOICES.map((voice) => (
-                <View key={voice.id} className={`voice-card clickable ${voiceType === voice.id ? "voice-card--selected" : ""}`} onClick={() => setVoiceType(voice.id)}>
-                  <Text>{voice.emoji}</Text><Text>{voice.name}</Text>
+            {allImagesReady ? (
+              <>
+                <Text className="story-label">AI 合成语音 · 选择朗读声音</Text>
+                <View className="voice-grid">
+                  {STORY_VOICES.map((voice) => (
+                    <View key={voice.id} className={`voice-card clickable ${voiceType === voice.id ? "voice-card--selected" : ""}`} onClick={() => setVoiceType(voice.id)}>
+                      <Text>{voice.emoji}</Text><Text>{voice.name}</Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-            <Button block size="xlarge" type="primary" disabled={illustrating || pages.some((page) => !page.imageUrl)} loading={Boolean(busyMessage)} onClick={prepareAndPlay}>
-              {playingPage ? `正在朗读第 ${playingPage} 页` : "播放四页朗读"}
-            </Button>
+                <Button block size="xlarge" type="primary" loading={Boolean(busyMessage)} onClick={prepareAndPlay}>
+                  {playingPage ? `正在朗读第 ${playingPage} 页` : "播放四页朗读"}
+                </Button>
+              </>
+            ) : null}
             {!illustrating ? <View className="story-restart clickable" onClick={restart}><Text>再讲一个故事</Text></View> : null}
             <AigcBadge />
           </View>
         ) : null}
       </View>
       <GenerationProgress
-        active={Boolean(busyMessage) || illustrating}
-        label={illustrating ? "正在逐页生成故事配图" : busyMessage || "正在生成故事"}
-        estimate={illustrating ? "约需1至2分钟" : busyMessage.includes("朗读") ? "约需1分钟" : "约需半分钟"}
+        active={Boolean(busyMessage)}
+        label={busyMessage || "正在生成故事"}
+        estimate={busyMessage.includes("朗读") ? "约需1分钟" : "约需半分钟"}
       />
     </View>
   );

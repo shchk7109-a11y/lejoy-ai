@@ -56,11 +56,12 @@ export async function volcGenerateImage(params: {
   imageUrls?: string[];
   aspectRatio?: AspectRatio;
   size?: string;
+  model?: string;
 }): Promise<string> {
   if (!ENV.arkApiKey) throw new Error("ARK_API_KEY 未配置");
 
   const body: Record<string, unknown> = {
-    model: ENV.arkImageModel,
+    model: params.model ?? ENV.arkImageModel,
     prompt: params.prompt,
     response_format: "b64_json",
     size: params.size ?? mapAspectToSize(params.aspectRatio),

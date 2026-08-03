@@ -238,10 +238,20 @@ export async function aiChatMulti(params: {
 export async function aiGenerateImage(params: {
   prompt: string;
   aspectRatio?: AspectRatio;
+  profile?: "story";
 }): Promise<string> {
   const provider = pickImageProvider(ENV.aiImageProvider, currentKeys());
 
   if (provider === "volc") {
+    if (params.profile === "story") {
+      recordAiRequestMetadata("volc", ENV.arkStoryImageModel);
+      return volcGenerateImage({
+        prompt: params.prompt,
+        aspectRatio: params.aspectRatio,
+        model: ENV.arkStoryImageModel,
+        size: "1K",
+      });
+    }
     recordAiRequestMetadata("volc", ENV.arkImageModel);
     return volcGenerateImage({ prompt: params.prompt, aspectRatio: params.aspectRatio });
   }

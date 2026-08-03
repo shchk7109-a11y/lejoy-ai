@@ -131,6 +131,7 @@ describe("M3 故事会 REST 接口", () => {
   });
 
   it("单页配图落 OSS 并提交媒体安全任务", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const deps = dependencies();
     const baseUrl = await startApp(deps);
     const response = await post(baseUrl, "/story/page-image", {
@@ -145,7 +146,7 @@ describe("M3 故事会 REST 接口", () => {
       pageNumber: 2,
       securityStatus: "pending",
     });
-    expect(deps.aiGenerateImage).toHaveBeenCalledWith(expect.objectContaining({ aspectRatio: "1:1" }));
+    expect(deps.aiGenerateImage).toHaveBeenCalledWith(expect.objectContaining({ aspectRatio: "1:1", profile: "story" }));
     expect(deps.storagePut).toHaveBeenCalledWith("stories/7/fixed-id-p2.png", expect.any(Buffer), "image/png");
     expect(deps.createMediaCheckTask).toHaveBeenCalledWith({
       traceId: "trace-m3",
@@ -153,6 +154,11 @@ describe("M3 故事会 REST 接口", () => {
       fileKey: "stories/7/fixed-id-p2.png",
       status: "pending",
     });
+    expect(info).toHaveBeenCalledWith("[story.page-image]", expect.objectContaining({
+      pageNumber: 2,
+      success: true,
+      durationMs: expect.any(Number),
+    }));
   });
 
   it("朗读音频落 OSS，只有第一页扣 2 积分", async () => {
