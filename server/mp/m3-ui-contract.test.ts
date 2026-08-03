@@ -28,6 +28,7 @@ describe("M3 小程序页面契约", () => {
 
   it("故事会包含六种风格、可选儿童信息、四页生成和方言朗读", () => {
     const page = source("pages/story-time/index.tsx");
+    const player = source("pages/story-player/index.tsx");
     const flow = source("features/story-time/flow.ts");
     for (const theme of ["温馨治愈", "科幻探险", "卡通童话", "睡前故事", "成语故事", "超级英雄"]) {
       expect(flow).toContain(theme);
@@ -35,7 +36,7 @@ describe("M3 小程序页面契约", () => {
     expect(page).toContain("VoiceInput");
     expect(page).toContain("四川话");
     expect(page).toContain("粤语");
-    expect(page).toContain("createInnerAudioContext");
+    expect(player).toContain("createInnerAudioContext");
     expect(page).toContain("pageNumber");
     expect(page).toContain("AigcBadge");
     expect(page).toContain("setIllustrating(true)");
