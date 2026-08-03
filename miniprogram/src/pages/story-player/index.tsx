@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Canvas, Image, Text, View } from "@tarojs/components";
 import Taro from "@tarojs/taro";
 import { PageHeader } from "../../components/PageHeader";
-import { buildStoryPageRenderPlan, exportStoryPages, StoryPageExportError, wrapCanvasText } from "../../features/story-time/export-pages";
+import { buildStoryPageRenderPlan, exportStoryPages, isAlbumPermissionError, StoryPageExportError, wrapCanvasText } from "../../features/story-time/export-pages";
 import { nextStoryPage, previousStoryPage, type LocalStory } from "../../features/story-time/library";
 import { readPlayingStory, storyStorage, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi } from "../../services/api";
@@ -103,11 +103,13 @@ export default function StoryPlayerPage() {
         return;
       }
       if (result.story) {
+        destroyAudio();
         setStory(result.story);
         writePlayingStory(result.story);
+        playPage(currentPageIndex, result.story);
       }
       storyStorage.queueRemoteAssets(result.remoteFileKeys);
-      await storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys));
+      void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
       await Taro.showToast({ title: "故事已保存到本机", icon: "success" });
     } catch {
       await Taro.showToast({ title: "保存失败，请检查手机存储空间", icon: "none", duration: 3000 });
@@ -177,8 +179,7 @@ export default function StoryPlayerPage() {
     } catch (error) {
       if (error instanceof StoryPageExportError) {
         setExportedPages((current) => Array.from(new Set([...current, ...error.completedPages])));
-        const message = String(error.originalError instanceof Error ? error.originalError.message : error.originalError ?? "");
-        if (/auth|authorize|permission|deny/i.test(message)) {
+        if (isAlbumPermissionError(error.originalError)) {
           const choice = await Taro.showModal({
             title: "需要相册权限",
             content: `第 ${error.failedPage} 页尚未保存。请在设置中允许保存到相册，已成功的页面不会重复保存。`,

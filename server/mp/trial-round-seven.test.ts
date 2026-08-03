@@ -85,4 +85,15 @@ describe("试用第七轮故事会本机书架", () => {
     expect(style).toContain("font-size: 40rpx");
     expect(style).toContain("topic-refresh-button--ready");
   });
+
+  it("故事资源生成后进入待释放队列并在下次进入时补清理", () => {
+    const story = read("miniprogram/src/pages/story-time/index.tsx");
+    const player = read("miniprogram/src/pages/story-player/index.tsx");
+    expect(story).toContain("storyStorage.queueRemoteAssets([image.fileKey])");
+    expect(story).toContain("storyStorage.queueRemoteAssets([speech.fileKey])");
+    expect(story).toContain("storyStorage.flushRemoteAssets");
+    expect(player).toContain("destroyAudio();");
+    expect(player).toContain("playPage(currentPageIndex, result.story)");
+    expect(player).toContain("flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch");
+  });
 });

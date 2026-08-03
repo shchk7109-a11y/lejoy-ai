@@ -3,10 +3,16 @@ import {
   StoryPageExportError,
   buildStoryPageRenderPlan,
   exportStoryPages,
+  isAlbumPermissionError,
   wrapCanvasText,
 } from "../../miniprogram/src/features/story-time/export-pages";
 
 describe("故事绘本四页相册导出", () => {
+  it("识别微信相册授权拒绝对象而不依赖 Error 实例", () => {
+    expect(isAlbumPermissionError({ errMsg: "saveImageToPhotosAlbum:fail auth deny" })).toBe(true);
+    expect(isAlbumPermissionError(new Error("canvas draw failed"))).toBe(false);
+  });
+
   it("中文按画布宽度分行且不会丢字", () => {
     const lines = wrapCanvasText("小象把苹果分享给了新朋友", 7, (text) => text.length);
     expect(lines).toEqual(["小象把苹果分享", "给了新朋友"]);

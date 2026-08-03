@@ -57,6 +57,15 @@ export class StoryPageExportError extends Error {
   }
 }
 
+export function isAlbumPermissionError(error: unknown): boolean {
+  const message = error instanceof Error
+    ? error.message
+    : error && typeof error === "object" && "errMsg" in error
+      ? String((error as { errMsg?: unknown }).errMsg ?? "")
+      : String(error ?? "");
+  return /auth|authorize|permission|deny/i.test(message);
+}
+
 export async function exportStoryPages<T extends number>(
   pageNumbers: T[],
   renderAndSave: (pageNumber: T) => Promise<void>,

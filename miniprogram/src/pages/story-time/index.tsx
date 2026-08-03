@@ -14,7 +14,7 @@ import {
   TOPIC_REFRESH_COOLDOWN_MS,
 } from "../../features/story-time/flow";
 import { runStoryImageQueue, type StoryImagePlan } from "../../features/story-time/image-queue";
-import { createStoryId, writePlayingStory } from "../../features/story-time/taro-story-storage";
+import { createStoryId, storyStorage, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
@@ -75,6 +75,10 @@ export default function StoryTimePage() {
     const timer = setInterval(updateRemaining, 1000);
     return () => clearInterval(timer);
   }, [topicRefreshReadyAt]);
+
+  useEffect(() => {
+    void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
+  }, []);
 
   function replacePages(nextPages: StoryPage[]): void {
     pagesRef.current = nextPages;
@@ -204,6 +208,7 @@ export default function StoryTimePage() {
             isFirstPage: plan.isFirstPage,
             title: plan.title,
           }, plan.operationId);
+          storyStorage.queueRemoteAssets([speech.fileKey]);
           savePagePatch(page.pageNumber, { audioUrl: speech.audioUrl, audioFileKey: speech.fileKey });
         } catch (error) {
           const remainingPlans = plans.slice(index);
@@ -242,6 +247,7 @@ export default function StoryTimePage() {
       }, plan.operationId), {
         onStart: (plan) => setActiveImagePage(plan.pageNumber),
         onSuccess: (plan, image) => {
+          storyStorage.queueRemoteAssets([image.fileKey]);
           savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl, imageFileKey: image.fileKey });
           setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== plan.pageNumber));
         },
@@ -268,6 +274,7 @@ export default function StoryTimePage() {
   }
 
   function restart() {
+    void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
     setStep("theme");
     setTheme("");
     setTopics([]);
