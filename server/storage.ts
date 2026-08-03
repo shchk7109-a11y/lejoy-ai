@@ -2,7 +2,7 @@
 // - 配置了 S3_* 环境变量时：使用阿里云 OSS（S3 兼容）/任意 S3 兼容存储（独立部署用）
 // - 否则回落到 Manus Biz 存储代理（遗留链路）
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from './_core/env';
 
@@ -189,6 +189,29 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
     key,
     url: await buildDownloadUrl(baseUrl, key, apiKey),
   };
+}
+
+export type StoredObjectSummary = { key: string; lastModified: Date };
+
+export async function storageList(prefix: string): Promise<StoredObjectSummary[]> {
+  if (!s3Enabled()) throw new Error("当前存储驱动不支持按前缀列举对象");
+  const normalizedPrefix = normalizeKey(prefix);
+  const objects: StoredObjectSummary[] = [];
+  let continuationToken: string | undefined;
+  do {
+    const response = await getS3Client().send(new ListObjectsV2Command({
+      Bucket: ENV.s3Bucket,
+      Prefix: normalizedPrefix,
+      ContinuationToken: continuationToken,
+    }));
+    for (const item of response.Contents ?? []) {
+      if (item.Key && item.LastModified) {
+        objects.push({ key: item.Key, lastModified: item.LastModified });
+      }
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return objects;
 }
 
 export async function storageDelete(relKey: string): Promise<void> {

@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMpRoutes } from "../mp";
+import { startStoryReferenceCleanup } from "../mp/story-reference-cleanup";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -38,6 +39,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   // 微信小程序 REST API（与现有 tRPC 并行，互不替换）
   registerMpRoutes(app);
+  startStoryReferenceCleanup();
   // tRPC API
   app.use(
     "/api/trpc",
