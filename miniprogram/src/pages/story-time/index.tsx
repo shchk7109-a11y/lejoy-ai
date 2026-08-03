@@ -13,8 +13,10 @@ import {
 } from "../../features/story-time/flow";
 import { runStoryStructureThenIllustrate } from "../../features/story-time/generation-flow";
 import { runStoryImageQueue, type StoryImagePlan } from "../../features/story-time/image-queue";
+import { runWithStoryReference } from "../../features/story-time/reference-photo";
 import { createStoryId, storyStorage, writePlayingStory } from "../../features/story-time/taro-story-storage";
 import { mpApi, type StoryPage, type StoryTopic } from "../../services/api";
+import { ensurePrivacyAuthorized } from "../../services/privacy";
 import { createOperationId } from "../../services/request-policy";
 import "./index.scss";
 
@@ -37,6 +39,33 @@ type StorySpeechPlan = {
   title?: string;
 };
 
+async function readBase64(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    Taro.getFileSystemManager().readFile({
+      filePath,
+      encoding: "base64",
+      success: (result) => resolve(String(result.data)),
+      fail: reject,
+    });
+  });
+}
+
+function imageMime(filePath: string): "image/jpeg" | "image/png" | "image/webp" {
+  const suffix = filePath.split("?")[0].split(".").pop()?.toLowerCase();
+  if (suffix === "png") return "image/png";
+  if (suffix === "webp") return "image/webp";
+  return "image/jpeg";
+}
+
+async function guideToSettings(): Promise<void> {
+  const result = await Taro.showModal({
+    title: "需要相机或相册权限",
+    content: "请在设置中允许访问相机或相册，再回来选择孩子照片。",
+    confirmText: "去设置",
+  });
+  if (result.confirm) await Taro.openSetting();
+}
+
 export default function StoryTimePage() {
   const [step, setStep] = useState<Step>("theme");
   const [theme, setTheme] = useState("");
@@ -52,16 +81,23 @@ export default function StoryTimePage() {
   const [illustrating, setIllustrating] = useState(false);
   const [activeImagePage, setActiveImagePage] = useState<number>();
   const [failedImagePages, setFailedImagePages] = useState<number[]>([]);
+  const [childPhotoPath, setChildPhotoPath] = useState("");
+  const [referencePhotoError, setReferencePhotoError] = useState("");
   const operationLockRef = useRef(false);
   const pagesRef = useRef<StoryPage[]>([]);
   const speechGeneratingRef = useRef(false);
   const imageGeneratingRef = useRef(false);
   const storyImageOperationIdsRef = useRef<Record<number, string>>({});
   const shownTopicTitlesRef = useRef<string[]>([]);
+  const activeReferenceKeyRef = useRef("");
   const { errorState, showMpError, dismissError, retryError } = useMpError();
 
   useEffect(() => {
     void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
+    return () => {
+      const fileKey = activeReferenceKeyRef.current;
+      if (fileKey) void mpApi.releaseStoryReference(fileKey).catch(() => undefined);
+    };
   }, []);
 
   function replacePages(nextPages: StoryPage[]): void {
@@ -93,6 +129,62 @@ export default function StoryTimePage() {
     const operationId = createOperationId(`story-image-${pageNumber}`);
     storyImageOperationIdsRef.current[pageNumber] = operationId;
     return operationId;
+  }
+
+  async function chooseChildPhoto(sourceType: "camera" | "album"): Promise<string | undefined> {
+    try {
+      await ensurePrivacyAuthorized();
+      const result = await Taro.chooseMedia({
+        count: 1,
+        mediaType: ["image"],
+        sourceType: [sourceType],
+        sizeType: ["original", "compressed"],
+      });
+      const file = result.tempFiles[0];
+      if (!file) return undefined;
+      if (file.size > 10 * 1024 * 1024) throw new Error("图片不能超过 10MB");
+      setChildPhotoPath(file.tempFilePath);
+      setReferencePhotoError("");
+      return file.tempFilePath;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("cancel")) return undefined;
+      if (message.includes("auth") || message.includes("permission") || message.includes("authorize") || message.includes("隐私")) {
+        await guideToSettings();
+        return undefined;
+      }
+      setReferencePhotoError(message || "照片暂时无法使用，请换一张或不用照片继续");
+      return undefined;
+    }
+  }
+
+  async function uploadChildReference(localPath: string) {
+    return mpApi.uploadStoryReference({
+      base64: await readBase64(localPath),
+      mimeType: imageMime(localPath),
+    });
+  }
+
+  function missingImagePlans(): StoryImagePlan[] {
+    return pagesRef.current
+      .filter((page) => !page.imageUrl)
+      .map((page) => ({
+        pageNumber: page.pageNumber,
+        imagePrompt: page.imagePrompt,
+        operationId: getStoryImageOperationId(page.pageNumber),
+      }));
+  }
+
+  async function replaceReferenceAndContinue(): Promise<void> {
+    const localPath = await chooseChildPhoto("album");
+    if (!localPath) return;
+    await generateStoryImages(missingImagePlans(), localPath);
+  }
+
+  function continueWithoutReference(): void {
+    setChildPhotoPath("");
+    setReferencePhotoError("");
+    void generateStoryImages(missingImagePlans(), "");
   }
 
   async function loadTopics(operationId = createOperationId("story-topics")) {
@@ -233,28 +325,43 @@ export default function StoryTimePage() {
     void Taro.navigateTo({ url: "/pages/story-player/index" });
   }
 
-  async function generateStoryImages(plans: StoryImagePlan[]): Promise<void> {
+  async function generateStoryImages(plans: StoryImagePlan[], referencePath = childPhotoPath): Promise<void> {
     if (!plans.length || imageGeneratingRef.current) return;
     imageGeneratingRef.current = true;
     setIllustrating(true);
+    setReferencePhotoError("");
     try {
-      const failures = await runStoryImageQueue(plans, (plan) => mpApi.generateStoryPageImage({
-        imagePrompt: plan.imagePrompt,
-        pageNumber: plan.pageNumber,
-      }, plan.operationId), {
-        onStart: (plan) => setActiveImagePage(plan.pageNumber),
-        onSuccess: (plan, image) => {
-          storyStorage.queueRemoteAssets([image.fileKey]);
-          savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl, imageFileKey: image.fileKey });
-          setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== plan.pageNumber));
-        },
-        onFailure: (plan) => setFailedImagePages((current) => (
-          current.includes(plan.pageNumber) ? current : [...current, plan.pageNumber]
-        )),
+      const failures = await runWithStoryReference({
+        localPath: referencePath,
+        upload: uploadChildReference,
+        release: (fileKey) => mpApi.releaseStoryReference(fileKey).then(() => undefined),
+        onReferenceReady: (fileKey) => { activeReferenceKeyRef.current = fileKey; },
+        onReferenceReleased: () => { activeReferenceKeyRef.current = ""; },
+        run: (referenceFileKey) => runStoryImageQueue(plans, (plan) => mpApi.generateStoryPageImage({
+          imagePrompt: plan.imagePrompt,
+          pageNumber: plan.pageNumber,
+          referenceFileKey,
+        }, plan.operationId), {
+          onStart: (plan) => setActiveImagePage(plan.pageNumber),
+          onSuccess: (plan, image) => {
+            storyStorage.queueRemoteAssets([image.fileKey]);
+            savePagePatch(plan.pageNumber, { imageUrl: image.imageUrl, imageFileKey: image.fileKey });
+            setFailedImagePages((current) => current.filter((pageNumber) => pageNumber !== plan.pageNumber));
+          },
+          onFailure: (plan) => setFailedImagePages((current) => (
+            current.includes(plan.pageNumber) ? current : [...current, plan.pageNumber]
+          )),
+        }),
       });
       if (failures.length) {
         await Taro.showToast({ title: `有 ${failures.length} 页配图未完成，可手动重试`, icon: "none", duration: 3000 });
       }
+    } catch {
+      setReferencePhotoError("照片暂时无法使用，请换一张或不用照片继续");
+      setFailedImagePages((current) => Array.from(new Set([
+        ...current,
+        ...plans.map((plan) => plan.pageNumber),
+      ])));
     } finally {
       imageGeneratingRef.current = false;
       setIllustrating(false);
@@ -271,6 +378,9 @@ export default function StoryTimePage() {
   }
 
   function restart() {
+    const referenceFileKey = activeReferenceKeyRef.current;
+    if (referenceFileKey) void mpApi.releaseStoryReference(referenceFileKey).catch(() => undefined);
+    activeReferenceKeyRef.current = "";
     void storyStorage.flushRemoteAssets((fileKeys) => mpApi.releaseStoryAssets(fileKeys)).catch(() => undefined);
     setStep("theme");
     setTheme("");
@@ -284,6 +394,8 @@ export default function StoryTimePage() {
     setIllustrating(false);
     setActiveImagePage(undefined);
     setFailedImagePages([]);
+    setChildPhotoPath("");
+    setReferencePhotoError("");
     dismissError();
   }
 
@@ -323,6 +435,27 @@ export default function StoryTimePage() {
             <Text className="story-label">年龄（1 至 12 岁）</Text>
             <Input className="story-input" value={age} type="number" maxlength={2} onInput={(event) => setAge(event.detail.value)} />
             <VoiceInput onResult={(text) => setChildName(text.slice(0, 20))} />
+            <View className="story-reference-photo">
+              <Text className="story-reference-photo__title">让孩子当故事主角（可选）</Text>
+              <Text className="story-reference-photo__privacy">
+                照片仅用于本次绘本形象参考，生成结束后自动删除，不保存到帐号或故事。
+              </Text>
+              {childPhotoPath ? (
+                <>
+                  <Image className="story-reference-photo__preview" src={childPhotoPath} mode="aspectFit" />
+                  <View className="story-reference-photo__actions">
+                    <Button size="xlarge" onClick={() => void chooseChildPhoto("album")}>更换照片</Button>
+                    <Button size="xlarge" onClick={() => { setChildPhotoPath(""); setReferencePhotoError(""); }}>不用照片</Button>
+                  </View>
+                </>
+              ) : (
+                <View className="story-reference-photo__actions">
+                  <Button size="xlarge" onClick={() => void chooseChildPhoto("camera")}>拍一张</Button>
+                  <Button size="xlarge" onClick={() => void chooseChildPhoto("album")}>从相册选择</Button>
+                </View>
+              )}
+              {referencePhotoError ? <Text className="story-reference-photo__error">{referencePhotoError}</Text> : null}
+            </View>
             <Button block size="xlarge" type="primary" loading={Boolean(busyMessage)} onClick={() => void loadTopics()}>继续选题材</Button>
           </View>
         ) : null}
@@ -384,6 +517,18 @@ export default function StoryTimePage() {
             <Text className="story-result__tip">
               {illustrating ? "四页文字已完成，正在逐页补图…" : failedImagePages.length ? `有 ${failedImagePages.length} 页配图未完成，请手动重试配图` : "共 4 页，文字和图片已准备好"}
             </Text>
+            {referencePhotoError ? (
+              <View className="story-reference-recovery">
+                <Text className="story-reference-recovery__title">孩子照片暂时无法使用</Text>
+                <Text className="story-reference-recovery__message">{referencePhotoError}</Text>
+                <Button block size="xlarge" type="primary" disabled={illustrating} onClick={() => void replaceReferenceAndContinue()}>
+                  换一张照片
+                </Button>
+                <Button block size="xlarge" disabled={illustrating} onClick={continueWithoutReference}>
+                  不用照片继续
+                </Button>
+              </View>
+            ) : null}
             <GenerationProgress
               active={illustrating}
               inline={true}

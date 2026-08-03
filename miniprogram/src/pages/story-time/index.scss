@@ -12,6 +12,17 @@
 .story-option__tip { margin-top: 8rpx; color: #475569; font-size: $font-secondary; line-height: 1.4; }
 .story-label { display: block; margin: 30rpx 0 14rpx; color: #1e3a8a; font-size: $font-body; font-weight: 700; }
 .story-input { min-height: 108rpx; padding: 22rpx 28rpx; border: 3rpx solid #bfdbfe; border-radius: 32rpx; background: #fff; font-size: $font-body; }
+.story-reference-photo { margin: 32rpx 0; padding: 30rpx; border: 3rpx solid $color-border; border-radius: $radius-card; background: $color-surface; }
+.story-reference-photo__title { display: block; color: $color-primary-strong; font-size: $font-title; font-weight: 800; }
+.story-reference-photo__privacy { display: block; margin-top: 14rpx; color: #475569; font-size: $font-secondary; line-height: 1.6; }
+.story-reference-photo__preview { width: 100%; height: 420rpx; margin-top: 24rpx; border: 3rpx solid $color-border; border-radius: 28rpx; background: #f8fafc; }
+.story-reference-photo__actions { margin-top: 24rpx; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18rpx; }
+.story-reference-photo__actions .nut-button { min-height: 108rpx; padding: 16rpx; font-size: 40rpx; font-weight: 700; }
+.story-reference-photo__error { display: block; margin-top: 20rpx; color: #9a3412; font-size: $font-secondary; font-weight: 700; line-height: 1.5; }
+.story-reference-recovery { margin-bottom: 30rpx; padding: 30rpx; border: 4rpx solid $color-primary; border-radius: $radius-card; background: #fff7ed; }
+.story-reference-recovery__title { display: block; color: #9a3412; font-size: $font-title; font-weight: 800; }
+.story-reference-recovery__message { display: block; margin: 16rpx 0 24rpx; color: #7c2d12; font-size: $font-body; line-height: 1.6; }
+.story-reference-recovery .nut-button { min-height: 108rpx; margin-top: 18rpx; font-size: 40rpx; font-weight: 700; }
 .topic-list { display: flex; flex-direction: column; gap: 24rpx; }
 .topic-card { padding: 30rpx; border: 3rpx solid #bfdbfe; border-radius: $radius-card; background: #eff6ff; }
 .topic-card__title { display: block; color: #1d4ed8; font-size: $font-title; font-weight: 800; }
