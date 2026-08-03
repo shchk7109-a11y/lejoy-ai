@@ -16,7 +16,9 @@
 .topic-card { padding: 30rpx; border: 3rpx solid #bfdbfe; border-radius: $radius-card; background: #eff6ff; }
 .topic-card__title { display: block; color: #1d4ed8; font-size: $font-title; font-weight: 800; }
 .topic-card__description, .topic-card__protagonist { display: block; margin-top: 12rpx; color: #475569; font-size: $font-secondary; line-height: 1.5; }
-.topic-list + .nut-button { margin-top: 28rpx; }
+.topic-refresh-button { min-height: 108rpx; margin-top: 28rpx; border: 3rpx solid $color-primary !important; font-size: 40rpx !important; font-weight: 700; }
+.topic-refresh-button--cooldown { background: $color-primary-soft !important; color: $color-primary-strong !important; opacity: 1 !important; }
+.topic-refresh-button--ready { background: $color-primary !important; color: #fff !important; }
 .custom-topic { margin-top: 36rpx; padding: 30rpx; border: 3rpx solid #bfdbfe; border-radius: $radius-card; background: #fff; }
 .custom-topic__title { display: block; color: #1e3a8a; font-size: $font-title; font-weight: 800; }
 .custom-topic__tip { display: block; margin-top: 12rpx; color: #475569; font-size: $font-secondary; line-height: 1.5; }

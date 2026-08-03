@@ -339,14 +339,14 @@ export default function StoryTimePage() {
               ))}
             </View>
             <Button
+              className={`topic-refresh-button ${topicRefreshRemaining > 0 ? "topic-refresh-button--cooldown" : "topic-refresh-button--ready"}`}
               block
               size="xlarge"
               type="primary"
-              fill="outline"
-              disabled={topicRefreshRemaining > 0 || Boolean(busyMessage)}
+              disabled={Boolean(busyMessage)}
               onClick={() => void refreshTopics()}
             >
-              {topicRefreshRemaining > 0 ? `${topicRefreshRemaining} 秒后可换一批` : "换一批灵感"}
+              {topicRefreshRemaining > 0 ? `换一批灵感（还需 ${topicRefreshRemaining} 秒）` : "换一批灵感"}
             </Button>
             <View className="custom-topic">
               <Text className="custom-topic__title">我来说主题</Text>

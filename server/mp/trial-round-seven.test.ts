@@ -71,4 +71,18 @@ describe("试用第七轮故事会本机书架", () => {
     expect(player).toContain("Taro.openSetting");
     expect(player).toContain("4 张绘本图片已保存到相册");
   });
+
+  it("换一批灵感按钮始终可见且冷却期点击会给大字提示", () => {
+    const story = read("miniprogram/src/pages/story-time/index.tsx");
+    const style = read("miniprogram/src/pages/story-time/index.scss");
+    const refreshBlock = story.slice(story.indexOf("topic-refresh-button"), story.indexOf("custom-topic"));
+    expect(refreshBlock).toContain("换一批灵感");
+    expect(refreshBlock).toContain("topicRefreshRemaining");
+    expect(refreshBlock).toContain("refreshTopics");
+    expect(refreshBlock).not.toContain("disabled={topicRefreshRemaining");
+    expect(style).toContain(".topic-refresh-button");
+    expect(style).toContain("min-height: 108rpx");
+    expect(style).toContain("font-size: 40rpx");
+    expect(style).toContain("topic-refresh-button--ready");
+  });
 });
