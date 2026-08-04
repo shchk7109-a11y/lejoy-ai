@@ -45,12 +45,15 @@ export const ENV = {
   // 阿里云 DashScope（TTS语音合成 + ASR语音识别）
   dashscopeApiKey: process.env.DASHSCOPE_API_KEY ?? "",
   dashscopeBaseUrl: process.env.DASHSCOPE_BASE_URL ?? "https://dashscope.aliyuncs.com",
+  dashscopeCompatibleBaseUrl: process.env.DASHSCOPE_COMPATIBLE_BASE_URL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  dashscopeVlModel: process.env.DASHSCOPE_VL_MODEL ?? "qwen3.7-flash-2026-07-15",
   dashscopeTtsModel: process.env.DASHSCOPE_TTS_MODEL ?? "qwen3-tts-flash",
   dashscopeCosyvoiceModel: process.env.DASHSCOPE_COSYVOICE_MODEL ?? "cosyvoice-v3-flash",
   dashscopeAsrModel: process.env.DASHSCOPE_ASR_MODEL ?? "qwen3-asr-flash",
 
   // 能力级供应商切换："auto"（有密钥则用新链路）| 明确指定 deepseek/kimi/volc/ali/minimax/gemini/forge
   aiTextFastProvider: process.env.AI_TEXT_FAST_PROVIDER ?? "auto",
+  aiVisionFastProvider: process.env.AI_VISION_FAST_PROVIDER ?? "auto",
   aiTextProvider: process.env.AI_TEXT_PROVIDER ?? "auto",
   aiImageProvider: process.env.AI_IMAGE_PROVIDER ?? "auto",
   aiTtsProvider: process.env.AI_TTS_PROVIDER ?? "auto",
