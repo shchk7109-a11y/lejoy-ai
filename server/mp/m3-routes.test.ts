@@ -54,7 +54,8 @@ function dependencies(overrides: Partial<M3Dependencies> = {}): M3Dependencies {
     fetchDouyinPublicMetadata: vi.fn(),
     inspectDishImage: vi.fn(),
     analyzeDishNutrition: vi.fn(),
-    identifyPlant: vi.fn(),
+    identifyPlantFast: vi.fn(),
+    getPlantDetails: vi.fn(),
     queryHealthInfo: vi.fn(),
     aiChatMulti: vi.fn(),
     checkTextSecurity: vi.fn(async () => ({ safe: true })),
@@ -585,11 +586,16 @@ describe("M3 生活助手 REST 接口", () => {
   });
 
   it("识花草只接受当前用户已登记的上传图并扣 1 分", async () => {
-    const identifyPlant = vi.fn(async () => ({
-      title: "月季 Rosa chinensis",
-      description: "常见观赏花卉。",
-      details: ["保持充足光照", "见干见湿浇水"],
-      tags: ["蔷薇科", "观赏花卉"],
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const identifyPlantFast = vi.fn(async () => ({
+      name: "月季",
+      commonNames: ["月月红"],
+      summary: "常见观赏花卉。",
+      safetyNotice: "枝条有刺。",
+      provider: "dashscope",
+      model: "qwen3.7-flash-2026-07-15",
+      fallbackUsed: false,
+      durationMs: 820,
     }));
     const deps = dependencies({
       findMediaCheckTaskByFile: vi.fn(async (_userId, fileKey) => ({
@@ -600,20 +606,67 @@ describe("M3 生活助手 REST 接口", () => {
         status: "pass",
         createdAt: new Date(),
       })),
-      identifyPlant,
+      identifyPlantFast,
     });
     const baseUrl = await startApp(deps);
     const response = await post(baseUrl, "/life/identify", { sourceFileKey: "uploads/7/flower.jpg" });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ title: "月季 Rosa chinensis", credits: 99 });
+    await expect(response.json()).resolves.toMatchObject({
+      name: "月季",
+      commonNames: ["月月红"],
+      summary: "常见观赏花卉。",
+      safetyNotice: "枝条有刺。",
+      title: "月季",
+      description: "常见观赏花卉。",
+      tags: [],
+      details: [],
+      provider: "dashscope",
+      model: "qwen3.7-flash-2026-07-15",
+      fallbackUsed: false,
+      credits: 99,
+    });
     expect(deps.storageGet).toHaveBeenCalledWith("uploads/7/flower.jpg");
-    expect(identifyPlant).toHaveBeenCalledWith({ imageUrl: "https://cdn.example/uploads/7/flower.jpg" });
+    expect(identifyPlantFast).toHaveBeenCalledWith("https://cdn.example/uploads/7/flower.jpg");
     expect(deps.withCreditCharge).toHaveBeenCalledWith(7, 1, "life_identify", expect.any(Function), "生活助手：识花草");
+    expect(info).toHaveBeenCalledWith("[life.plant-identify]", expect.objectContaining({
+      userId: 7,
+      provider: "dashscope",
+      model: "qwen3.7-flash-2026-07-15",
+      fallbackUsed: false,
+      durationMs: expect.any(Number),
+      success: true,
+    }));
 
     const external = await post(baseUrl, "/life/identify", { imageUrl: "https://attacker.example/flower.jpg" });
     expect(external.status).toBe(400);
-    expect(identifyPlant).toHaveBeenCalledTimes(1);
+    expect(identifyPlantFast).toHaveBeenCalledTimes(1);
+    info.mockRestore();
+  });
+
+  it("植物详情只接受短名称且不看图、不扣积分", async () => {
+    const getPlantDetails = vi.fn(async () => ({
+      carePoints: ["保持充足光照"],
+      floweringAndHabits: ["春末至秋季开花"],
+      meaningAndStories: ["寓意幸福长久"],
+    }));
+    const deps = dependencies({ getPlantDetails });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/life/plant-details", { plantName: " 月季 " });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      carePoints: ["保持充足光照"],
+      floweringAndHabits: ["春末至秋季开花"],
+      meaningAndStories: ["寓意幸福长久"],
+    });
+    expect(getPlantDetails).toHaveBeenCalledWith("月季");
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+
+    expect((await post(baseUrl, "/life/plant-details", { plantName: "" })).status).toBe(400);
+    expect((await post(baseUrl, "/life/plant-details", { plantName: "花".repeat(81) })).status).toBe(400);
+    expect((await post(baseUrl, "/life/plant-details", { sourceFileKey: "uploads/7/flower.jpg" })).status).toBe(400);
+    expect(getPlantDetails).toHaveBeenCalledTimes(1);
   });
 
   it("健康百科支持文字或本人上传图并扣 1 分", async () => {

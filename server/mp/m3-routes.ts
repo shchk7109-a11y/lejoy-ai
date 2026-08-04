@@ -16,10 +16,10 @@ import {
   buildStoryImagePrompt,
   generateFoodImage,
   generateStoryText,
-  identifyPlant,
   queryHealthInfo,
   suggestStoryTopics,
 } from "../minimaxService";
+import { getPlantDetails, identifyPlantFast } from "../plant-identification";
 import { storageDelete, storageGet, storagePut } from "../storage";
 import type { MpAuthenticatedRequest } from "./auth";
 import { sendMpTimeoutError } from "./operations";
@@ -52,7 +52,8 @@ export type M3Dependencies = {
   fetchDouyinPublicMetadata: typeof fetchDouyinPublicMetadata;
   inspectDishImage: typeof inspectDishImage;
   analyzeDishNutrition: typeof analyzeDishNutrition;
-  identifyPlant: typeof identifyPlant;
+  identifyPlantFast: typeof identifyPlantFast;
+  getPlantDetails: typeof getPlantDetails;
   queryHealthInfo: typeof queryHealthInfo;
   aiChatMulti: typeof aiChatMulti;
   checkTextSecurity: (text: string, openId?: string) => Promise<SecurityCheckResult>;
@@ -80,7 +81,8 @@ export function defaultM3Dependencies(): M3Dependencies {
     fetchDouyinPublicMetadata,
     inspectDishImage,
     analyzeDishNutrition,
-    identifyPlant,
+    identifyPlantFast,
+    getPlantDetails,
     queryHealthInfo,
     aiChatMulti,
     checkTextSecurity,
@@ -517,14 +519,50 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       badRequest(res, "请选择当前账号已上传且通过安全登记的植物图片");
       return;
     }
-    const charged = await deps.withCreditCharge(
-      user.id,
-      1,
-      "life_identify",
-      () => deps.identifyPlant({ imageUrl: source.url }),
-      "生活助手：识花草",
-    );
-    res.json({ ...charged.value, credits: charged.credits });
+    const startedAt = Date.now();
+    let provider: string | undefined;
+    let model: string | undefined;
+    let fallbackUsed: boolean | undefined;
+    let success = false;
+    try {
+      const charged = await deps.withCreditCharge(
+        user.id,
+        1,
+        "life_identify",
+        () => deps.identifyPlantFast(source.url),
+        "生活助手：识花草",
+      );
+      provider = charged.value.provider;
+      model = charged.value.model;
+      fallbackUsed = charged.value.fallbackUsed;
+      success = true;
+      res.json({
+        ...charged.value,
+        title: charged.value.name,
+        description: charged.value.summary,
+        tags: [],
+        details: [],
+        credits: charged.credits,
+      });
+    } finally {
+      console.info("[life.plant-identify]", {
+        userId: user.id,
+        provider,
+        model,
+        fallbackUsed,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        success,
+      });
+    }
+  }));
+
+  router.post("/life/plant-details", asyncRoute(async (req, res) => {
+    const plantName = nonEmpty(req.body?.plantName);
+    if (!plantName || plantName.length > 80) {
+      badRequest(res, "请输入 80 字以内的植物名称");
+      return;
+    }
+    res.json(await deps.getPlantDetails(plantName));
   }));
 
   router.post("/life/health", asyncRoute(async (req, res) => {
