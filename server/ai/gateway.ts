@@ -13,6 +13,7 @@ import { callGeminiText, callGeminiImage, callGeminiTTS } from "../geminiService
 import { transcribeAudio } from "../_core/voiceTranscription";
 import { kimiChat, KimiMessage } from "./kimiClient";
 import { deepseekChat, DeepSeekMessage } from "./deepseekClient";
+import { dashscopeVisionChat } from "./dashscopeVisionClient";
 import { recordAiRequestMetadata } from "./requestTelemetry";
 import {
   volcGenerateImage,
@@ -59,6 +60,13 @@ export function pickFastTextProvider(
   return "gemini";
 }
 
+export type FastVisionProvider = "dashscope" | "kimi";
+
+export function pickFastVisionProvider(setting: string, keys: ProviderKeys): FastVisionProvider {
+  if (setting === "dashscope" || setting === "kimi") return setting;
+  return keys.dashscope ? "dashscope" : "kimi";
+}
+
 export function pickTextProvider(setting: string, keys: ProviderKeys): "kimi" | "minimax" | "gemini" {
   if (setting !== "auto") return setting as any;
   if (keys.moonshot) return "kimi";
@@ -98,6 +106,67 @@ async function fetchAsDataUrl(url: string): Promise<{ dataUrl: string; base64: s
 }
 
 // ─── 文本/视觉理解 ────────────────────────────────────────────────────────────
+
+export type FastVisionResult = {
+  content: string;
+  provider: FastVisionProvider;
+  model: string;
+  fallbackUsed: boolean;
+  durationMs: number;
+};
+
+/** 低时延视觉理解：DashScope 优先，失败后单次回落 Kimi。 */
+export async function aiVisionFast(params: {
+  systemPrompt: string;
+  userPrompt: string;
+  imageUrl: string;
+  maxTokens?: number;
+}): Promise<FastVisionResult> {
+  const startedAt = Date.now();
+  const provider = pickFastVisionProvider(ENV.aiVisionFastProvider, currentKeys());
+
+  if (provider === "dashscope") {
+    recordAiRequestMetadata("dashscope", ENV.dashscopeVlModel);
+    try {
+      const content = await dashscopeVisionChat({
+        imageUrl: params.imageUrl,
+        prompt: `${params.systemPrompt}\n\n${params.userPrompt}`,
+        maxTokens: params.maxTokens ?? 180,
+      });
+      return {
+        content,
+        provider: "dashscope",
+        model: ENV.dashscopeVlModel,
+        fallbackUsed: false,
+        durationMs: Math.max(0, Date.now() - startedAt),
+      };
+    } catch (error) {
+      console.warn("[AI vision-fast fallback]", {
+        from: "dashscope",
+        to: "kimi",
+        reason: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }
+
+  recordAiRequestMetadata("kimi", ENV.moonshotModel);
+  const { dataUrl } = await fetchAsDataUrl(params.imageUrl);
+  const content = await kimiChat({
+    messages: [
+      { role: "system", text: params.systemPrompt },
+      { role: "user", text: params.userPrompt, imageDataUrl: dataUrl },
+    ],
+    json: true,
+    maxTokens: params.maxTokens ?? 180,
+  });
+  return {
+    content,
+    provider: "kimi",
+    model: ENV.moonshotModel,
+    fallbackUsed: provider === "dashscope",
+    durationMs: Math.max(0, Date.now() - startedAt),
+  };
+}
 
 /**
  * 单轮生成（系统提示 + 用户提示，可选图片 URL，可选 JSON 模式）
