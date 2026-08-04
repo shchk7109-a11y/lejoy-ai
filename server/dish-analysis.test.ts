@@ -175,6 +175,30 @@ describe("抖音公开元数据降级", () => {
     await expect(fetchDouyinPublicMetadata("https://v.douyin.com/a/", failed as typeof fetch)).resolves.toBeUndefined();
   });
 
+  it("无 Content-Length 的大页面在流读取超限时立即取消", async () => {
+    const chunks = [new Uint8Array(200 * 1024), new Uint8Array(80 * 1024)];
+    const reader = {
+      read: vi.fn(async () => chunks.length > 0
+        ? { done: false as const, value: chunks.shift()! }
+        : { done: true as const, value: undefined }),
+      cancel: vi.fn(async () => undefined),
+    };
+    const arrayBuffer = vi.fn(async () => { throw new Error("不应整页读取"); });
+    const response = {
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "text/html" }),
+      body: { getReader: () => reader },
+      arrayBuffer,
+    } as unknown as Response;
+    const fetchImpl = vi.fn(async () => response);
+
+    await expect(fetchDouyinPublicMetadata("https://v.douyin.com/large/", fetchImpl as typeof fetch))
+      .resolves.toBeUndefined();
+    expect(reader.cancel).toHaveBeenCalledOnce();
+    expect(arrayBuffer).not.toHaveBeenCalled();
+  });
+
   it("没有短链接时不发网络请求", async () => {
     const fetchImpl = vi.fn();
     await expect(fetchDouyinPublicMetadata("糖醋排骨", fetchImpl as typeof fetch)).resolves.toBeUndefined();

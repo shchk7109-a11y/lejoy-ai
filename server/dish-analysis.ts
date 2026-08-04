@@ -246,6 +246,28 @@ function extractPublicMetadata(html: string): string | undefined {
   return unique.length > 0 ? unique.join("\n").slice(0, 1000) : undefined;
 }
 
+async function readBoundedResponse(response: Response): Promise<Buffer | undefined> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    const body = Buffer.from(await response.arrayBuffer());
+    return body.byteLength <= MAX_METADATA_BYTES ? body : undefined;
+  }
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    if (!chunk.value) continue;
+    totalBytes += chunk.value.byteLength;
+    if (totalBytes > MAX_METADATA_BYTES) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(Buffer.from(chunk.value));
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
 export async function fetchDouyinPublicMetadata(
   text: string,
   fetchImpl: Fetch = fetch,
@@ -277,8 +299,8 @@ export async function fetchDouyinPublicMetadata(
       if (!response.ok || !response.headers.get("content-type")?.toLowerCase().includes("text/html")) return undefined;
       const declaredLength = Number(response.headers.get("content-length") ?? 0);
       if (Number.isFinite(declaredLength) && declaredLength > MAX_METADATA_BYTES) return undefined;
-      const body = Buffer.from(await response.arrayBuffer());
-      if (body.byteLength > MAX_METADATA_BYTES) return undefined;
+      const body = await readBoundedResponse(response);
+      if (!body) return undefined;
       return extractPublicMetadata(body.toString("utf8"));
     }
     return undefined;
