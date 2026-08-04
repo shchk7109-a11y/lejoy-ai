@@ -6,6 +6,12 @@ import { ENV } from "../_core/env";
 import { withCreditCharge } from "../credits-charge";
 import { getUserById } from "../db";
 import {
+  analyzeDishNutrition,
+  extractDishName,
+  fetchDouyinPublicMetadata,
+  inspectDishImage,
+} from "../dish-analysis";
+import {
   analyzeFoodNutrition,
   buildStoryImagePrompt,
   generateFoodImage,
@@ -42,6 +48,10 @@ export type M3Dependencies = {
   aiTTS: typeof aiTTS;
   analyzeFoodNutrition: typeof analyzeFoodNutrition;
   generateFoodImage: typeof generateFoodImage;
+  extractDishName: typeof extractDishName;
+  fetchDouyinPublicMetadata: typeof fetchDouyinPublicMetadata;
+  inspectDishImage: typeof inspectDishImage;
+  analyzeDishNutrition: typeof analyzeDishNutrition;
   identifyPlant: typeof identifyPlant;
   queryHealthInfo: typeof queryHealthInfo;
   aiChatMulti: typeof aiChatMulti;
@@ -66,6 +76,10 @@ export function defaultM3Dependencies(): M3Dependencies {
     aiTTS,
     analyzeFoodNutrition,
     generateFoodImage,
+    extractDishName,
+    fetchDouyinPublicMetadata,
+    inspectDishImage,
+    analyzeDishNutrition,
     identifyPlant,
     queryHealthInfo,
     aiChatMulti,
@@ -343,6 +357,104 @@ export function createM3Router(deps: M3Dependencies, authenticate: RequestHandle
       return;
     }
     const charged = await deps.withCreditCharge(user.id, 2, "story_speech", generateSpeech, "AI故事语音生成");
+    res.json({ ...charged.value, credits: charged.credits });
+  }));
+
+  router.post("/life/dish-analyze", asyncRoute(async (req, res) => {
+    const user = (req as MpAuthenticatedRequest).mpUser;
+    const dishText = nonEmpty(req.body?.dishText);
+    const fileKey = nonEmpty(req.body?.fileKey);
+    if (Boolean(dishText) === Boolean(fileKey)) {
+      badRequest(res, "请输入菜名或分享内容，或者选择一张菜品图片");
+      return;
+    }
+    if (dishText.length > 1000) {
+      badRequest(res, "菜名或分享内容不能超过 1000 字");
+      return;
+    }
+
+    let dishName: string | undefined;
+    let ingredients: Awaited<ReturnType<typeof deps.inspectDishImage>>["ingredients"] | undefined;
+    let source: StoredFile | undefined;
+    if (dishText) {
+      const inputCheck = await checkTextBatches([dishText], user.openId);
+      if (!inputCheck.safe) {
+        res.status(422).json({
+          error: { code: "CONTENT_REJECTED", message: inputCheck.reason ?? "输入内容未通过安全检查" },
+        });
+        return;
+      }
+      dishName = await deps.extractDishName(dishText);
+      if (!dishName) {
+        const metadata = await deps.fetchDouyinPublicMetadata(dishText);
+        if (metadata) dishName = await deps.extractDishName(metadata);
+      }
+    } else {
+      source = await resolveOwnedImage(fileKey, user);
+      if (!source) {
+        badRequest(res, "请选择当前账号已上传且通过安全登记的菜品图片");
+        return;
+      }
+      const inspection = await deps.inspectDishImage(source.url);
+      dishName = inspection.dishName;
+      ingredients = inspection.ingredients;
+    }
+
+    if (!dishName) {
+      res.json({
+        code: "DISH_NOT_FOUND",
+        message: "没认出这道菜，请说一下菜名，或拍张照片",
+        credits: await deps.getCredits(user.id),
+      });
+      return;
+    }
+
+    const charged = await deps.withCreditCharge(
+      user.id,
+      1,
+      "life_dish_analyze",
+      async () => {
+        const nutritionPromise = deps.analyzeDishNutrition({ dishName, ingredients });
+        const imagePromise = source
+          ? Promise.resolve(undefined)
+          : deps.generateFoodImage(dishName);
+        const [nutritionResult, imageResult] = await Promise.allSettled([nutritionPromise, imagePromise]);
+        if (nutritionResult.status === "rejected") throw nutritionResult.reason;
+
+        let imageUrl = source?.url;
+        let imageSource: "generated" | "upload" | "none" = source ? "upload" : "none";
+        let securityStatus: "bypassed" | "pending" | undefined;
+        if (!source && imageResult.status === "fulfilled" && imageResult.value) {
+          try {
+            const imageMatch = imageResult.value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+            if (imageMatch) {
+              const mimeType = imageMatch[1];
+              const extension = mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+              const file = await deps.storagePut(
+                `life-food/${user.id}/${deps.createFileId()}.${extension}`,
+                Buffer.from(imageMatch[2], "base64"),
+                mimeType,
+              );
+              securityStatus = await submitStoredImage(file, user);
+              imageUrl = file.url;
+              imageSource = "generated";
+            }
+          } catch {
+            imageUrl = undefined;
+            imageSource = "none";
+            securityStatus = undefined;
+          }
+        }
+        return {
+          code: "OK" as const,
+          ...nutritionResult.value,
+          imageUrl,
+          imageSource,
+          ...(securityStatus ? { securityStatus } : {}),
+        };
+      },
+      "生活助手：菜品健康分析",
+    );
     res.json({ ...charged.value, credits: charged.credits });
   }));
 

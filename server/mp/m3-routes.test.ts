@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { User } from "../../drizzle/schema";
 import { withCreditCharge } from "../credits-charge";
+import { DISH_ANALYSIS_DISCLAIMER, type DishNutritionAnalysis } from "../dish-analysis";
 import { CHAT_DISCLAIMER, CHAT_MEDICAL_GUIDANCE } from "./chat-persona";
 import { createM3Router, type M3Dependencies } from "./m3-routes";
 
@@ -49,6 +50,10 @@ function dependencies(overrides: Partial<M3Dependencies> = {}): M3Dependencies {
     aiTTS: vi.fn(async () => ({ audioData: Buffer.from("speech").toString("base64"), audioMime: "audio/mpeg" })),
     analyzeFoodNutrition: vi.fn(),
     generateFoodImage: vi.fn(),
+    extractDishName: vi.fn(),
+    fetchDouyinPublicMetadata: vi.fn(),
+    inspectDishImage: vi.fn(),
+    analyzeDishNutrition: vi.fn(),
     identifyPlant: vi.fn(),
     queryHealthInfo: vi.fn(),
     aiChatMulti: vi.fn(),
@@ -365,6 +370,195 @@ describe("M3 生活助手 REST 接口", () => {
     ingredients: ["番茄富含维生素", "鸡蛋提供蛋白质"],
     advice: "少油少盐更适合日常食用。",
   };
+
+  const dishAnalysis: DishNutritionAnalysis = {
+    title: "番茄炒蛋",
+    healthScore: 82,
+    scoreLabel: "较健康",
+    portionBasis: "每100克估算",
+    nutrition: {
+      calories: "120kcal",
+      protein: "6g",
+      fat: "7g",
+      carbs: "8g",
+      sodium: "300mg",
+      sugar: "3g",
+    },
+    ingredients: {
+      primary: ["番茄", "鸡蛋"],
+      secondary: [],
+      seasonings: ["盐", "食用油"],
+    },
+    overview: "蛋白质和蔬菜搭配较均衡。",
+    attentionPoints: [
+      { kind: "positive", title: "蛋白质来源", detail: "鸡蛋提供蛋白质。" },
+      { kind: "caution", title: "留意用油", detail: "用油量会影响脂肪。" },
+    ],
+    cookingTips: ["少油炒制。"],
+    pairingTips: ["搭配一份绿叶菜。"],
+    tags: ["家常菜"],
+    disclaimer: DISH_ANALYSIS_DISCLAIMER,
+  };
+
+  it("菜名识别后并行启动营养分析与配图，只扣 1 分", async () => {
+    let resolveNutrition!: (value: DishNutritionAnalysis) => void;
+    let resolveImage!: (value: string) => void;
+    const nutritionPromise = new Promise<DishNutritionAnalysis>((resolve) => { resolveNutrition = resolve; });
+    const imagePromise = new Promise<string>((resolve) => { resolveImage = resolve; });
+    const deps = dependencies({
+      extractDishName: vi.fn(async () => "番茄炒蛋"),
+      fetchDouyinPublicMetadata: vi.fn(),
+      analyzeDishNutrition: vi.fn(() => nutritionPromise),
+      generateFoodImage: vi.fn(() => imagePromise),
+    });
+    const baseUrl = await startApp(deps);
+
+    const pendingResponse = post(baseUrl, "/life/dish-analyze", { dishText: "番茄炒蛋" });
+    await vi.waitFor(() => {
+      expect(deps.analyzeDishNutrition).toHaveBeenCalledOnce();
+      expect(deps.generateFoodImage).toHaveBeenCalledOnce();
+    });
+    expect(deps.fetchDouyinPublicMetadata).not.toHaveBeenCalled();
+
+    resolveNutrition(dishAnalysis);
+    resolveImage(`data:image/jpeg;base64,${Buffer.from("dish-image").toString("base64")}`);
+    const response = await pendingResponse;
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "OK",
+      title: "番茄炒蛋",
+      imageSource: "generated",
+      imageUrl: "https://cdn.example/life-food/7/fixed-id.jpg",
+      healthScore: 82,
+      credits: 99,
+    });
+    expect(deps.withCreditCharge).toHaveBeenCalledWith(
+      7,
+      1,
+      "life_dish_analyze",
+      expect.any(Function),
+      "生活助手：菜品健康分析",
+    );
+  });
+
+  it("分享文案直取失败后抓公开标题再识别", async () => {
+    const extractDishName = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce("糖醋排骨");
+    const deps = dependencies({
+      extractDishName,
+      fetchDouyinPublicMetadata: vi.fn(async () => "糖醋排骨的家常做法"),
+      analyzeDishNutrition: vi.fn(async () => ({ ...dishAnalysis, title: "糖醋排骨" })),
+      generateFoodImage: vi.fn(async () => { throw new Error("image unavailable"); }),
+    });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/life/dish-analyze", {
+      dishText: "复制 https://v.douyin.com/abc/ 打开抖音",
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "OK",
+      title: "糖醋排骨",
+      imageSource: "none",
+      credits: 99,
+    });
+    expect(extractDishName).toHaveBeenNthCalledWith(1, "复制 https://v.douyin.com/abc/ 打开抖音");
+    expect(extractDishName).toHaveBeenNthCalledWith(2, "糖醋排骨的家常做法");
+  });
+
+  it("文字与公开标题均未识别时返回友好结果且不扣分", async () => {
+    const deps = dependencies({
+      extractDishName: vi.fn(async () => undefined),
+      fetchDouyinPublicMetadata: vi.fn(async () => undefined),
+      getCredits: vi.fn(async () => 37),
+    });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/life/dish-analyze", { dishText: "今天吃点好的" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      code: "DISH_NOT_FOUND",
+      message: "没认出这道菜，请说一下菜名，或拍张照片",
+      credits: 37,
+    });
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+    expect(deps.analyzeDishNutrition).not.toHaveBeenCalled();
+    expect(deps.generateFoodImage).not.toHaveBeenCalled();
+  });
+
+  it("本人上传菜图经视觉拆解后返回原图并扣 1 分", async () => {
+    const ingredients = dishAnalysis.ingredients;
+    const deps = dependencies({
+      findMediaCheckTaskByFile: vi.fn(async (_userId, fileKey) => ({
+        id: 8,
+        traceId: "trace-dish",
+        userId: 7,
+        fileKey,
+        status: "pass",
+        createdAt: new Date(),
+      })),
+      inspectDishImage: vi.fn(async () => ({ dishName: "番茄炒蛋", ingredients })),
+      analyzeDishNutrition: vi.fn(async () => dishAnalysis),
+    });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/life/dish-analyze", { fileKey: "uploads/7/dish.jpg" });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "OK",
+      imageUrl: "https://cdn.example/uploads/7/dish.jpg",
+      imageSource: "upload",
+      ingredients,
+      credits: 99,
+    });
+    expect(deps.inspectDishImage).toHaveBeenCalledWith("https://cdn.example/uploads/7/dish.jpg");
+    expect(deps.analyzeDishNutrition).toHaveBeenCalledWith({ dishName: "番茄炒蛋", ingredients });
+    expect(deps.generateFoodImage).not.toHaveBeenCalled();
+  });
+
+  it("菜图未识别不扣分，非本人图片直接拒绝", async () => {
+    const deps = dependencies({
+      findMediaCheckTaskByFile: vi.fn(async (_userId, fileKey) => fileKey.includes("dish.jpg") ? ({
+        id: 9,
+        traceId: "trace-dish-miss",
+        userId: 7,
+        fileKey,
+        status: "pass",
+        createdAt: new Date(),
+      }) : undefined),
+      inspectDishImage: vi.fn(async () => ({
+        dishName: undefined,
+        ingredients: { primary: [], secondary: [], seasonings: [] },
+      })),
+    });
+    const baseUrl = await startApp(deps);
+
+    const miss = await post(baseUrl, "/life/dish-analyze", { fileKey: "uploads/7/dish.jpg" });
+    const foreign = await post(baseUrl, "/life/dish-analyze", { fileKey: "uploads/8/dish.jpg" });
+
+    expect(miss.status).toBe(200);
+    await expect(miss.json()).resolves.toMatchObject({ code: "DISH_NOT_FOUND", credits: 100 });
+    expect(foreign.status).toBe(400);
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
+
+  it("菜品文字未通过安全检查时不调用模型也不扣分", async () => {
+    const deps = dependencies({
+      checkTextSecurity: vi.fn(async () => ({ safe: false, reason: "内容不合适" })),
+    });
+    const baseUrl = await startApp(deps);
+
+    const response = await post(baseUrl, "/life/dish-analyze", { dishText: "不合适内容" });
+
+    expect(response.status).toBe(422);
+    expect(deps.extractDishName).not.toHaveBeenCalled();
+    expect(deps.withCreditCharge).not.toHaveBeenCalled();
+  });
 
   it("查菜谱同时生成营养卡和菜图，扣 1 分并送检生成图", async () => {
     const deps = dependencies({

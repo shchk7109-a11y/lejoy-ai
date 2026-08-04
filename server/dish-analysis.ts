@@ -155,12 +155,13 @@ export async function analyzeDishNutrition(
   if (!Array.isArray(parsed.attentionPoints) || parsed.attentionPoints.length < 1 || parsed.attentionPoints.length > 4) {
     throw new Error("重点关注格式无效");
   }
-  const attentionPoints = parsed.attentionPoints.map((point) => {
+  const attentionPoints: DishNutritionAnalysis["attentionPoints"] = parsed.attentionPoints.map((point): DishNutritionAnalysis["attentionPoints"][number] => {
     if (!point || typeof point !== "object" || Array.isArray(point)) throw new Error("重点关注格式无效");
     const record = point as Record<string, unknown>;
-    if (record.kind !== "positive" && record.kind !== "caution") throw new Error("重点关注类型无效");
+    const kind = record.kind;
+    if (kind !== "positive" && kind !== "caution") throw new Error("重点关注类型无效");
     return {
-      kind: record.kind,
+      kind,
       title: boundedString(record.title, "重点关注标题", 30),
       detail: boundedString(record.detail, "重点关注说明", 120),
     };
@@ -224,7 +225,7 @@ function decodeHtml(value: string): string {
 
 function metaAttributes(tag: string): Record<string, string> {
   const attributes: Record<string, string> = {};
-  for (const match of tag.matchAll(/([:\w-]+)\s*=\s*(["'])([\s\S]*?)\2/g)) {
+  for (const match of Array.from(tag.matchAll(/([:\w-]+)\s*=\s*(["'])([\s\S]*?)\2/g))) {
     attributes[match[1].toLowerCase()] = decodeHtml(match[3]);
   }
   return attributes;
@@ -241,7 +242,7 @@ function extractPublicMetadata(html: string): string | undefined {
       values.push(attributes.content.slice(0, 500));
     }
   }
-  const unique = [...new Set(values.filter(Boolean))];
+  const unique = Array.from(new Set(values.filter(Boolean)));
   return unique.length > 0 ? unique.join("\n").slice(0, 1000) : undefined;
 }
 
