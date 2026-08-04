@@ -19,11 +19,11 @@ export type PlantDetails = {
 
 function parseJsonObject(raw: string): Record<string, unknown> {
   const cleaned = raw
-    .replace(/<think>[\s\S]*?<\/think>/gu, "")
-    .replace(/```json\s*/giu, "")
-    .replace(/```/gu, "")
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
+    .replace(/```json\s*/gi, "")
+    .replace(/```/g, "")
     .trim();
-  const match = cleaned.match(/\{[\s\S]*\}/u);
+  const match = cleaned.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("未找到 JSON 对象");
   const parsed: unknown = JSON.parse(match[0]);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
