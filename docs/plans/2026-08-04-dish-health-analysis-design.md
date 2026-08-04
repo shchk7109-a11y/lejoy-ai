@@ -210,4 +210,3 @@ DeepSeek JSON 模式只要求返回对象，不使用裸数组，避免与 `json
 3. 提交并推送 `codex/m4-release-ready`。
 4. SSH 执行 `scripts/deploy/02-deploy.sh`。
 5. `curl https://api.hxzhineng.xyz/api/mp/health` 验证生产健康状态，并检查 PM2 日志不含用户输入原文。
-

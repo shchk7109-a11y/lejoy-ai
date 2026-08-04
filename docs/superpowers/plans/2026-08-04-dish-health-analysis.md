@@ -413,4 +413,3 @@ Expected: public health returns success, PM2 shows one online fork instance, and
 - [ ] **Step 6: Report evidence**
 
 Report the final commit, push result, test totals, production-build verifier output, deployment result, health response, and the requirement that the user upload experience version `0.9.7`.
-
