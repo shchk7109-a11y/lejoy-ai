@@ -4,15 +4,15 @@ import { identifyPlantFast } from "../server/plant-identification";
 const SAMPLES = [
   {
     sample: "close-flower",
-    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Red%20rose%20close-up.jpg",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Red%20rose%20close-up.jpg?width=1280",
   },
   {
     sample: "whole-plant",
-    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Common%20sunflower.jpg",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Common%20sunflower.jpg?width=1280",
   },
   {
     sample: "tree-leaf",
-    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Maple%20leaf%20%2851163110492%29.jpg",
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Maple%20leaf%20%2851163110492%29.jpg?width=1280",
   },
 ] as const;
 
@@ -26,12 +26,27 @@ type SuccessfulResult = {
   identifiedName: string;
 };
 
+async function fetchSampleAsDataUrl(imageUrl: string): Promise<string> {
+  const response = await fetch(imageUrl, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!response.ok) throw new Error(`sample download failed: ${response.status}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > 5 * 1024 * 1024) {
+    throw new Error("sample image size is invalid");
+  }
+  return `data:image/jpeg;base64,${bytes.toString("base64")}`;
+}
+
 const successes: SuccessfulResult[] = [];
 
 for (const sample of SAMPLES) {
-  const startedAt = Date.now();
+  let startedAt = Date.now();
   try {
-    const result = await identifyPlantFast(sample.imageUrl);
+    const dataUrl = await fetchSampleAsDataUrl(sample.imageUrl);
+    startedAt = Date.now();
+    const result = await identifyPlantFast(dataUrl);
     const output: SuccessfulResult = {
       sample: sample.sample,
       ok: true,

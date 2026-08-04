@@ -15,13 +15,22 @@ describe("识花视觉真实链路验证脚本", () => {
     expect(source).toContain("averageMs");
   });
 
+  it("先把公开样本转为内联图片，避免模型侧拉取境外图片超时", () => {
+    expect(existsSync(scriptPath)).toBe(true);
+    if (!existsSync(scriptPath)) return;
+    const source = readFileSync(scriptPath, "utf8");
+    expect(source).toContain("fetchSampleAsDataUrl");
+    expect(source).toContain("arrayBuffer");
+    expect(source).toContain("data:image/jpeg;base64,");
+  });
+
   it("只输出诊断字段，不读取或打印密钥与图片正文", () => {
     expect(existsSync(scriptPath)).toBe(true);
     if (!existsSync(scriptPath)) return;
     const source = readFileSync(scriptPath, "utf8");
     expect(source).not.toContain("DASHSCOPE_API_KEY");
     expect(source).not.toContain("Authorization");
-    expect(source).not.toContain("base64");
+    expect(source).not.toMatch(/console\.(?:log|error)\([^\n]*(?:imageUrl|dataUrl|base64)/);
     expect(source).toContain("provider");
     expect(source).toContain("model");
     expect(source).toContain("fallbackUsed");
