@@ -20,7 +20,10 @@ describe("首页模块注册表", () => {
       enabled: false,
     });
     expect(MP_MODULES.find((module) => module.id === "story-time")).toMatchObject({ enabled: true });
-    expect(MP_MODULES.find((module) => module.id === "life-assistant")).toMatchObject({ enabled: true });
+    expect(MP_MODULES.find((module) => module.id === "life-assistant")).toMatchObject({
+      enabled: true,
+      description: "菜品健康分析、识花草",
+    });
     expect(MP_MODULES.find((module) => module.id === "ai-kaleidoscope")).toMatchObject({
       enabled: true,
       description: "生活百科，陪您聊聊",

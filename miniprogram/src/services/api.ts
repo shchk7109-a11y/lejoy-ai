@@ -66,6 +66,43 @@ export type LifeResult = {
   securityStatus?: MediaSecurityStatus;
   credits: number;
 };
+export type DishIngredients = {
+  primary: string[];
+  secondary: string[];
+  seasonings: string[];
+};
+export type DishAnalyzeSuccess = {
+  code: "OK";
+  title: string;
+  imageUrl?: string;
+  imageSource: "generated" | "upload" | "none";
+  healthScore: number;
+  scoreLabel: string;
+  portionBasis: string;
+  nutrition: {
+    calories: string;
+    protein: string;
+    fat: string;
+    carbs: string;
+    sodium: string;
+    sugar: string;
+  };
+  ingredients: DishIngredients;
+  overview: string;
+  attentionPoints: Array<{ kind: "positive" | "caution"; title: string; detail: string }>;
+  cookingTips: string[];
+  pairingTips: string[];
+  disclaimer: string;
+  tags: string[];
+  securityStatus?: MediaSecurityStatus;
+  credits: number;
+};
+export type DishAnalyzeNotFound = {
+  code: "DISH_NOT_FOUND";
+  message: string;
+  credits: number;
+};
+export type DishAnalyzeResult = DishAnalyzeSuccess | DishAnalyzeNotFound;
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 async function request<T>(path: string, options: {
@@ -161,6 +198,8 @@ export const mpApi = {
     request<{ audioUrl: string; fileKey: string; pageNumber: number; credits?: number }>("/api/mp/story/page-speech", { method: "POST", data, retry: "never", operationId }),
   releaseStoryAssets: (fileKeys: string[]) =>
     request<{ deleted: number; retainedFileKeys?: string[] }>("/api/mp/story/release-assets", { method: "POST", data: { fileKeys }, retry: "never" }),
+  analyzeDish: (data: { dishText: string } | { fileKey: string }, operationId?: string) =>
+    request<DishAnalyzeResult>("/api/mp/life/dish-analyze", { method: "POST", data, retry: "never", operationId }),
   getRecipe: (foodName: string, operationId?: string) =>
     request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never", operationId }),
   identifyPlant: (sourceFileKey: string, operationId?: string) =>

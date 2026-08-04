@@ -1,25 +1,83 @@
 @use "../../styles/tokens.scss" as *;
 
-.life-page { min-height: 100vh; padding-bottom: 140rpx; background: $color-page; }
+.life-page {
+  min-height: 100vh;
+  padding-bottom: 140rpx;
+  background: linear-gradient(180deg, #f0fdf4 0%, $color-page 52%);
+  color: $color-text;
+}
+
 .life-content { padding: 40rpx $page-padding; }
 .life-title { display: block; color: #14532d; font-size: $font-hero; font-weight: 800; line-height: 1.35; }
-.life-subtitle { display: block; margin-top: 14rpx; color: #52705d; font-size: $font-secondary; }
+.life-subtitle { display: block; margin-top: 14rpx; color: #52705d; font-size: $font-secondary; line-height: 1.55; }
 .life-entry-list { margin-top: 38rpx; display: flex; flex-direction: column; gap: 28rpx; }
-.life-entry { min-height: 170rpx; padding: 30rpx; display: flex; align-items: center; gap: 28rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #dcfce7; }
-.life-entry__emoji { width: 96rpx; font-size: 64rpx; text-align: center; }
+.life-entry { min-height: 180rpx; padding: 32rpx; display: flex; align-items: center; gap: 28rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; }
+.life-entry__emoji { width: 96rpx; flex: 0 0 96rpx; font-size: 64rpx; text-align: center; }
 .life-entry__name { display: block; color: #166534; font-size: $font-title; font-weight: 800; }
 .life-entry__tip { display: block; margin-top: 10rpx; color: #52705d; font-size: $font-secondary; line-height: 1.5; }
 .life-step { display: block; margin-bottom: 16rpx; color: #166534; font-size: $font-secondary; font-weight: 800; }
-.life-input { width: 100%; min-height: 230rpx; margin-top: 32rpx; padding: 28rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; font-size: $font-body; line-height: 1.6; }
+
+.life-notice { margin-top: 26rpx; padding: 24rpx 28rpx; border: 3rpx solid #fbbf24; border-radius: 30rpx; background: #fffbeb; color: #92400e; font-size: $font-body; font-weight: 700; line-height: 1.55; }
+.life-input { box-sizing: border-box; width: 100%; min-height: 240rpx; margin-top: 30rpx; padding: 28rpx; border: 3rpx solid #86efac; border-radius: $radius-card; background: #fff; color: $color-text; font-size: $font-body; line-height: 1.6; box-shadow: $shadow-card; }
+.life-photo-preview { width: 100%; height: 420rpx; margin-top: 28rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; }
 .life-photo-actions { margin-top: 32rpx; display: flex; flex-direction: column; gap: 20rpx; }
-.life-back { margin-top: 24rpx; display: flex; align-items: center; justify-content: center; color: #166534; font-weight: 700; }
-.life-result__title { display: block; color: #14532d; font-size: $font-hero; font-weight: 800; }
-.life-result__image { width: 100%; height: 500rpx; margin-top: 26rpx; border-radius: $radius-card; }
-.life-result__description { display: block; margin-top: 26rpx; font-size: $font-body; line-height: 1.65; }
-.life-tags { margin-top: 22rpx; display: flex; flex-wrap: wrap; gap: 14rpx; }
-.life-tag { min-height: 72rpx; padding: 14rpx 22rpx; border-radius: 999rpx; background: #dcfce7; color: #166534; font-size: $font-secondary; font-weight: 700; }
-.life-score { display: block; margin-top: 26rpx; color: #166534; font-size: $font-title; font-weight: 800; }
-.life-section { margin: 26rpx 0; padding: 28rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; }
-.life-section--advice { background: #f0fdf4; }
-.life-section__title { display: block; margin-bottom: 18rpx; color: #166534; font-size: $font-title; font-weight: 800; }
+.life-photo-actions--row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.life-photo-actions :global(.nut-button) { min-height: $touch-min; border-color: #16a34a !important; color: #166534 !important; font-size: $font-body; font-weight: 800; }
+.life-or { margin-top: 34rpx; display: flex; align-items: center; justify-content: center; color: $color-secondary; font-size: $font-secondary; }
+.life-back { min-height: $touch-min; margin-top: 24rpx; display: flex; align-items: center; justify-content: center; color: #166534; font-size: $font-secondary; font-weight: 700; }
+
+.life-primary-button { min-height: $button-main-height !important; margin-top: 26rpx; border-color: $color-primary !important; background: $color-primary !important; color: #fff !important; font-size: $font-button !important; font-weight: 800 !important; }
+
+.life-result { display: flex; flex-direction: column; gap: 26rpx; }
+.life-result__title { display: block; color: $color-text; font-size: $font-hero; font-weight: 800; line-height: 1.3; }
+.life-result__image { width: 100%; height: 500rpx; border: 3rpx solid #dcfce7; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; object-fit: contain; }
+.life-result__placeholder { height: 360rpx; display: flex; align-items: center; justify-content: center; border: 3rpx dashed #bbf7d0; border-radius: $radius-card; background: #fff; font-size: 120rpx; }
+.life-result__description { display: block; font-size: $font-body; line-height: 1.65; }
+
+.life-score-card { padding: 30rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; }
+.life-score-card__main { display: flex; align-items: flex-start; justify-content: space-between; gap: 24rpx; }
+.life-score-card__name { min-width: 0; flex: 1; }
+.life-score { min-width: 150rpx; display: flex; flex-direction: column; align-items: center; color: #c2410c; }
+.life-score__value { display: block; font-size: 88rpx; font-weight: 900; line-height: 1; }
+.life-score__label { display: block; margin-top: 8rpx; color: #9a3412; font-size: $font-secondary; font-weight: 800; }
+.life-tags { margin-top: 18rpx; display: flex; flex-wrap: wrap; gap: 12rpx; }
+.life-tag { min-height: 62rpx; padding: 10rpx 18rpx; border-radius: 999rpx; background: #f5f5f4; color: $color-secondary; font-size: $font-secondary; line-height: 1.5; }
+.life-portion { margin-top: 26rpx; padding-top: 24rpx; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; border-top: 2rpx solid #e7e5e4; }
+.life-portion__label { color: #166534; font-size: $font-secondary; font-weight: 800; }
+.life-portion__value { color: $color-secondary; font-size: $font-secondary; text-align: right; }
+
+.life-section { padding: 30rpx; border: 3rpx solid #dcfce7; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; }
+.life-section--overview { background: #fafaf9; }
+.life-section--advice { border-color: #86efac; background: #f0fdf4; }
+.life-section__title { display: block; margin-bottom: 22rpx; color: #166534; font-size: $font-title; font-weight: 800; }
 .life-point { display: block; margin-top: 12rpx; font-size: $font-body; line-height: 1.65; }
+
+.life-nutrition-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20rpx; }
+.life-nutrient { min-height: 150rpx; padding: 22rpx 16rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 30rpx; background: #fff7ed; text-align: center; }
+.life-nutrient--protein { background: #eff6ff; }
+.life-nutrient--fat { background: #fefce8; }
+.life-nutrient--carbs { background: #faf5ff; }
+.life-nutrient--sodium { background: #f5f5f4; }
+.life-nutrient--sugar { background: #fdf2f8; }
+.life-nutrient__label { display: block; color: $color-secondary; font-size: $font-secondary; }
+.life-nutrient__value { display: block; margin-top: 12rpx; color: $color-text; font-size: $font-title; font-weight: 900; word-break: break-all; }
+
+.life-attention-list { display: flex; flex-direction: column; gap: 18rpx; }
+.life-attention { padding: 22rpx; border-left: 10rpx solid #16a34a; border-radius: 24rpx; background: #f0fdf4; }
+.life-attention--caution { border-left-color: #f59e0b; background: #fffbeb; }
+.life-attention__title { display: block; color: #166534; font-size: $font-body; font-weight: 800; }
+.life-attention--caution .life-attention__title { color: #92400e; }
+
+.life-ingredient-group + .life-ingredient-group { margin-top: 24rpx; padding-top: 22rpx; border-top: 2rpx solid #e7e5e4; }
+.life-ingredient-group__title { display: block; color: $color-text; font-size: $font-body; font-weight: 800; }
+.life-ingredient-list { margin-top: 14rpx; display: flex; flex-wrap: wrap; gap: 12rpx; }
+.life-ingredient { min-height: 66rpx; padding: 10rpx 18rpx; border-radius: 999rpx; background: #f0fdf4; color: #166534; font-size: $font-secondary; line-height: 1.6; }
+.life-advice-subtitle { display: block; margin-top: 20rpx; color: #166534; font-size: $font-body; font-weight: 800; }
+.life-disclaimer { padding: 24rpx 28rpx; border-radius: 28rpx; background: #f5f5f4; color: $color-muted; font-size: $font-secondary; line-height: 1.6; }
+
+@media (max-width: 340px) {
+  .life-photo-actions--row,
+  .life-nutrition-grid { grid-template-columns: 1fr; }
+  .life-score-card__main { flex-direction: column; }
+  .life-score { align-items: flex-start; }
+}

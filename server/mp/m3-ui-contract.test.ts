@@ -17,6 +17,7 @@ describe("M3 小程序页面契约", () => {
       "generateStoryStructure",
       "generateStoryPageImage",
       "generateStoryPageSpeech",
+      "analyzeDish",
       "getRecipe",
       "identifyPlant",
       "queryHealth",
@@ -47,13 +48,25 @@ describe("M3 小程序页面契约", () => {
     expect(page).toContain("配图未完成");
   });
 
-  it("生活助手三项均有一次一问入口，文字入口接语音", () => {
+  it("生活助手统一菜名、分享、语音和拍照入口并移除健康百科", () => {
     const page = source("pages/life-assistant/index.tsx");
-    for (const entry of ["查菜谱", "识花草", "健康百科"]) expect(page).toContain(entry);
-    expect(page).toContain('mode !== "plant"');
+    const styles = source("pages/life-assistant/index.scss");
+    for (const entry of ["菜品健康分析", "识花草", "输入菜名，或粘贴抖音分享内容", "拍一道菜", "从相册选择"]) {
+      expect(page).toContain(entry);
+    }
+    for (const removed of ["查菜谱", "健康百科"]) expect(page).not.toContain(removed);
     expect(page.match(/<VoiceInput/g)?.length).toBeGreaterThanOrEqual(1);
     expect(page).toContain("chooseMedia");
+    expect(page).toContain("DISH_NOT_FOUND");
+    expect(page).toContain("focus={dishInputFocused}");
+    expect(page).toContain('mode="aspectFit"');
+    for (const section of ["营养估算口径", "重点关注", "原材料", "配料", "调味料", "更健康的吃法"]) {
+      expect(page).toContain(section);
+    }
     expect(page).toContain("AigcBadge");
+    expect(styles).toMatch(/life-primary-button[\s\S]*min-height:\s*\$button-main-height/);
+    expect(styles).toMatch(/life-primary-button[\s\S]*font-size:\s*\$font-button/);
+    expect(styles).toMatch(/life-nutrition-grid[\s\S]*grid-template-columns:\s*repeat\(2/);
   });
 
   it("万花筒提供一次性提示、多轮气泡、语音输入、朗读和常驻标识", () => {
