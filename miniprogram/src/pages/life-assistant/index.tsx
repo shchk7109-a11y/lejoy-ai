@@ -12,10 +12,12 @@ import {
   type DishAnalyzeResult,
   type DishAnalyzeSuccess,
   type DishIngredients,
-  type LifeResult,
+  type PlantDetails,
+  type PlantIdentifyResult,
 } from "../../services/api";
 import { ensurePrivacyAuthorized } from "../../services/privacy";
 import { createOperationId } from "../../services/request-policy";
+import { compressPlantImage } from "./image-compression";
 import "./index.scss";
 
 type Mode = "dish" | "plant";
@@ -51,7 +53,9 @@ export default function LifeAssistantPage() {
   const [dishInputFocused, setDishInputFocused] = useState(false);
   const [previewPath, setPreviewPath] = useState("");
   const [dishResult, setDishResult] = useState<DishAnalyzeSuccess>();
-  const [plantResult, setPlantResult] = useState<LifeResult>();
+  const [plantResult, setPlantResult] = useState<PlantIdentifyResult>();
+  const [plantDetails, setPlantDetails] = useState<PlantDetails>();
+  const [plantDetailsBusy, setPlantDetailsBusy] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
   const operationLockRef = useRef(false);
   const { errorState, showMpError, dismissError, retryError } = useMpError();
@@ -105,16 +109,21 @@ export default function LifeAssistantPage() {
         count: 1,
         mediaType: ["image"],
         sourceType: [sourceType],
-        sizeType: ["compressed", "original"],
+        sizeType: selectedMode === "plant" ? ["compressed"] : ["compressed", "original"],
       });
       const file = media.tempFiles[0];
       if (!file) return;
-      if (file.size > 10 * 1024 * 1024) throw new Error("图片不能超过 10MB");
-      setPreviewPath(file.tempFilePath);
-      setBusyMessage(selectedMode === "dish" ? "正在识别菜品并分析营养…" : "正在识别花草…");
+      if (selectedMode === "dish" && file.size > 10 * 1024 * 1024) throw new Error("图片不能超过 10MB");
+      setBusyMessage(selectedMode === "dish" ? "正在识别菜品并分析营养…" : "正在辨认");
+      const preparedPath = selectedMode === "plant"
+        ? await compressPlantImage(file.tempFilePath, Taro)
+        : file.tempFilePath;
+      const base64 = await readBase64(preparedPath);
+      if (base64ByteLength(base64) > 10 * 1024 * 1024) throw new Error("图片不能超过 10MB");
+      setPreviewPath(preparedPath);
       const uploaded = await mpApi.uploadImage({
-        base64: await readBase64(file.tempFilePath),
-        mimeType: imageMime(file.tempFilePath),
+        base64,
+        mimeType: imageMime(preparedPath),
       });
       try {
         await analyzeUploaded(uploaded.fileKey, selectedMode, operationId);
@@ -133,6 +142,7 @@ export default function LifeAssistantPage() {
   async function analyzeUploaded(fileKey: string, selectedMode: Mode, operationId: string): Promise<void> {
     if (selectedMode === "plant") {
       setPlantResult(await mpApi.identifyPlant(fileKey, operationId));
+      setPlantDetails(undefined);
       return;
     }
     acceptDishResult(await mpApi.analyzeDish({ fileKey }, operationId));
@@ -142,7 +152,7 @@ export default function LifeAssistantPage() {
     if (operationLockRef.current) return;
     operationLockRef.current = true;
     dismissError();
-    setBusyMessage(selectedMode === "dish" ? "正在重新分析刚才的菜品…" : "正在重新识别刚才的花草…");
+    setBusyMessage(selectedMode === "dish" ? "正在重新分析刚才的菜品…" : "正在辨认");
     try {
       await analyzeUploaded(fileKey, selectedMode, operationId);
     } catch (error) {
@@ -153,10 +163,26 @@ export default function LifeAssistantPage() {
     }
   }
 
+  async function loadPlantDetails(operationId = createOperationId("life-plant-details")) {
+    if (!plantResult || plantDetailsBusy || operationLockRef.current) return;
+    operationLockRef.current = true;
+    setPlantDetailsBusy(true);
+    dismissError();
+    try {
+      setPlantDetails(await mpApi.getPlantDetails(plantResult.name, operationId));
+    } catch (error) {
+      showMpError(error, () => loadPlantDetails(operationId));
+    } finally {
+      operationLockRef.current = false;
+      setPlantDetailsBusy(false);
+    }
+  }
+
   function chooseMode(selectedMode: Mode) {
     setMode(selectedMode);
     setDishNotice("");
     setPreviewPath("");
+    setPlantDetails(undefined);
     dismissError();
     if (selectedMode === "dish") setTimeout(() => setDishInputFocused(true), 0);
   }
@@ -169,6 +195,8 @@ export default function LifeAssistantPage() {
     setPreviewPath("");
     setDishResult(undefined);
     setPlantResult(undefined);
+    setPlantDetails(undefined);
+    setPlantDetailsBusy(false);
     dismissError();
   }
 
@@ -252,12 +280,23 @@ export default function LifeAssistantPage() {
         ) : null}
 
         {dishResult ? <DishResultCard result={dishResult} previewPath={previewPath} onRestart={restart} /> : null}
-        {plantResult ? <PlantResultCard result={plantResult} previewPath={previewPath} onRestart={restart} /> : null}
+        {plantResult ? (
+          <PlantResultCard
+            result={plantResult}
+            details={plantDetails}
+            detailsBusy={plantDetailsBusy}
+            previewPath={previewPath}
+            onLoadDetails={() => void loadPlantDetails()}
+            onRestart={restart}
+          />
+        ) : null}
       </View>
       <GenerationProgress
         active={Boolean(busyMessage)}
-        label={busyMessage || "正在查询生活助手"}
-        estimate={mode === "dish" ? "约需半分钟" : "约需十几秒"}
+        label={mode === "plant" ? "正在辨认" : (busyMessage || "正在查询生活助手")}
+        estimate={mode === "dish" ? "约需半分钟" : "通常20秒内"}
+        slowAfterSeconds={mode === "plant" ? 30 : undefined}
+        slowLabel={mode === "plant" ? "网络有点慢，再等等" : undefined}
       />
     </View>
   );
@@ -352,23 +391,65 @@ function DishResultCard({ result, previewPath, onRestart }: {
   );
 }
 
-function PlantResultCard({ result, previewPath, onRestart }: {
-  result: LifeResult;
+function PlantResultCard({ result, details, detailsBusy, previewPath, onLoadDetails, onRestart }: {
+  result: PlantIdentifyResult;
+  details?: PlantDetails;
+  detailsBusy: boolean;
   previewPath: string;
+  onLoadDetails: () => void;
   onRestart: () => void;
 }) {
   return (
     <View className="life-result">
-      <Text className="life-result__title">{result.title}</Text>
-      {result.imageUrl || previewPath ? <Image className="life-result__image" src={result.imageUrl || previewPath} mode="aspectFit" /> : null}
-      <Text className="life-result__description">{result.description}</Text>
-      <View className="life-tags">{result.tags.map((tag, index) => <Text key={`plant-tag-${index}-${tag}`} className="life-tag">{tag}</Text>)}</View>
-      <View className="life-section">
-        <Text className="life-section__title">养护要点</Text>
-        {result.details.map((detail, index) => <Text key={`plant-detail-${index}-${detail}`} className="life-point">• {detail}</Text>)}
-      </View>
+      <Text className="life-plant-name">{result.name}</Text>
+      {result.commonNames.length ? (
+        <Text className="life-plant-common-names">俗名：{result.commonNames.join("、")}</Text>
+      ) : null}
+      {previewPath ? <Image className="life-result__image" src={previewPath} mode="aspectFit" /> : null}
+      <Text className="life-result__description">{result.summary}</Text>
+      {result.safetyNotice ? (
+        <View className="life-plant-safety"><Text>⚠️ {result.safetyNotice}</Text></View>
+      ) : null}
+
+      {!details ? (
+        <View>
+          <Button
+            className="life-primary-button"
+            block
+            size="xlarge"
+            type="primary"
+            loading={detailsBusy}
+            onClick={onLoadDetails}
+          >
+            了解更多
+          </Button>
+          <GenerationProgress
+            active={detailsBusy}
+            inline
+            label="正在整理养护知识"
+            estimate="通常几秒钟"
+          />
+        </View>
+      ) : (
+        <View className="life-plant-details">
+          <PlantDetailSection title="养护要点" items={details.carePoints} />
+          <PlantDetailSection title="花期习性" items={details.floweringAndHabits} />
+          <PlantDetailSection title="寓意典故" items={details.meaningAndStories} />
+        </View>
+      )}
       <Button className="life-primary-button" block size="xlarge" type="primary" onClick={onRestart}>继续使用生活助手</Button>
       <AigcBadge />
+    </View>
+  );
+}
+
+function PlantDetailSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <View className="life-section">
+      <Text className="life-section__title">{title}</Text>
+      {items.map((item, index) => (
+        <Text key={`${title}-${index}-${item}`} className="life-point">• {item}</Text>
+      ))}
     </View>
   );
 }
@@ -385,4 +466,8 @@ function readBase64(filePath: string): Promise<string> {
 function imageMime(filePath: string): "image/jpeg" | "image/png" | "image/webp" {
   const extension = filePath.split("?")[0].split(".").pop()?.toLowerCase();
   return extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+}
+
+function base64ByteLength(value: string): number {
+  return Math.floor(value.length * 0.75);
 }

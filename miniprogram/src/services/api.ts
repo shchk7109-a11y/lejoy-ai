@@ -66,6 +66,22 @@ export type LifeResult = {
   securityStatus?: MediaSecurityStatus;
   credits: number;
 };
+export type PlantIdentifyResult = {
+  name: string;
+  commonNames: string[];
+  summary: string;
+  safetyNotice: string;
+  provider: string;
+  model: string;
+  fallbackUsed: boolean;
+  durationMs: number;
+  credits: number;
+};
+export type PlantDetails = {
+  carePoints: string[];
+  floweringAndHabits: string[];
+  meaningAndStories: string[];
+};
 export type DishIngredients = {
   primary: string[];
   secondary: string[];
@@ -203,7 +219,9 @@ export const mpApi = {
   getRecipe: (foodName: string, operationId?: string) =>
     request<LifeResult>("/api/mp/life/recipe", { method: "POST", data: { foodName }, retry: "never", operationId }),
   identifyPlant: (sourceFileKey: string, operationId?: string) =>
-    request<LifeResult>("/api/mp/life/identify", { method: "POST", data: { sourceFileKey }, retry: "never", operationId }),
+    request<PlantIdentifyResult>("/api/mp/life/identify", { method: "POST", data: { sourceFileKey }, retry: "never", operationId }),
+  getPlantDetails: (plantName: string, operationId?: string) =>
+    request<PlantDetails>("/api/mp/life/plant-details", { method: "POST", data: { plantName }, retry: "never", operationId }),
   queryHealth: (data: { textHint?: string; sourceFileKey?: string }, operationId?: string) =>
     request<LifeResult>("/api/mp/life/health", { method: "POST", data, retry: "never", operationId }),
   chat: (message: string, history: ChatMessage[], operationId?: string) =>

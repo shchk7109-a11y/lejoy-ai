@@ -33,6 +33,10 @@
 .life-result__image { width: 100%; height: 500rpx; border: 3rpx solid #dcfce7; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; object-fit: contain; }
 .life-result__placeholder { height: 360rpx; display: flex; align-items: center; justify-content: center; border: 3rpx dashed #bbf7d0; border-radius: $radius-card; background: #fff; font-size: 120rpx; }
 .life-result__description { display: block; font-size: $font-body; line-height: 1.65; }
+.life-plant-name { display: block; color: #14532d; font-size: $font-hero; font-weight: 900; line-height: 1.3; }
+.life-plant-common-names { display: block; color: #52705d; font-size: $font-body; line-height: 1.6; }
+.life-plant-safety { padding: 26rpx 28rpx; border: 3rpx solid #f59e0b; border-radius: 28rpx; background: #fffbeb; color: #78350f; font-size: $font-body; font-weight: 800; line-height: 1.6; }
+.life-plant-details { display: flex; flex-direction: column; gap: 24rpx; }
 
 .life-score-card { padding: 30rpx; border: 3rpx solid #bbf7d0; border-radius: $radius-card; background: #fff; box-shadow: $shadow-card; }
 .life-score-card__main { display: flex; align-items: flex-start; justify-content: space-between; gap: 24rpx; }
