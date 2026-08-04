@@ -9,6 +9,8 @@ type GenerationProgressProps = {
   label: string;
   estimate?: string;
   inline?: boolean;
+  slowAfterSeconds?: number;
+  slowLabel?: string;
 };
 
 export function GenerationProgress({
@@ -16,6 +18,8 @@ export function GenerationProgress({
   label,
   estimate = "约需半分钟",
   inline = false,
+  slowAfterSeconds,
+  slowLabel,
 }: GenerationProgressProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const activeRef = useRef(active);
@@ -55,7 +59,7 @@ export function GenerationProgress({
     <View className={`generation-progress ${inline ? "generation-progress--inline" : ""}`} role="status" aria-live="polite">
       <View className="generation-progress__spinner" />
       <Text className="generation-progress__title">
-        {formatGenerationProgress(label, elapsedSeconds, estimate)}
+        {formatGenerationProgress(label, elapsedSeconds, estimate, { slowAfterSeconds, slowLabel })}
       </Text>
       <Text className="generation-progress__tip">请不要退出或重复点击</Text>
     </View>
