@@ -97,7 +97,8 @@ git commit -m "fix: support legacy experience QR route"
 - Verify: `miniprogram/dist/pages/index/index.js`
 - Verify: `miniprogram/dist/pages/index/index.json`
 - Verify: `miniprogram/dist/pages/index/index.wxml`
-- Verify: `miniprogram/dist/pages/index/index.wxss`
+- Verify: `miniprogram/dist/app.wxss`
+- Verify: `miniprogram/dist/common.wxss`
 
 - [ ] **Step 1: 运行完整测试和类型检查**
 
@@ -120,10 +121,10 @@ Expected: 构建退出码为 0，输出包含：
 - [ ] **Step 3: 核对兼容路由产物**
 
 ```bash
-node -e 'const fs=require("fs");const app=JSON.parse(fs.readFileSync("miniprogram/dist/app.json","utf8"));const route="pages/index/index";const files=[".js",".json",".wxml",".wxss"].map(ext=>`miniprogram/dist/${route}${ext}`);if(!app.pages.includes(route)||files.some(file=>!fs.existsSync(file))){process.exit(1)}console.log(`legacy_route=${route} artifacts=${files.length}`)'
+node -e 'const fs=require("fs");const app=JSON.parse(fs.readFileSync("miniprogram/dist/app.json","utf8"));const route="pages/index/index";const files=[".js",".json",".wxml"].map(ext=>`miniprogram/dist/${route}${ext}`);const appWxss=fs.readFileSync("miniprogram/dist/app.wxss","utf8");const commonWxss=fs.readFileSync("miniprogram/dist/common.wxss","utf8");if(app.pages[0]!=="pages/login/index"||!app.pages.includes(route)||files.some(file=>!fs.existsSync(file))||!appWxss.includes("common.wxss")||!commonWxss.includes(".login-page")){process.exit(1)}console.log(`first_page=${app.pages[0]} legacy_route=${route} page_artifacts=${files.length} shared_style=ok`)'
 ```
 
-Expected: `legacy_route=pages/index/index artifacts=4`。
+Expected: `first_page=pages/login/index legacy_route=pages/index/index page_artifacts=3 shared_style=ok`。
 
 - [ ] **Step 4: 核对提交范围并推送**
 

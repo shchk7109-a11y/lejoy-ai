@@ -31,7 +31,9 @@
    登录页而不是复制登录代码。
 2. 实现最小兼容页面后运行针对性测试、完整测试和 TypeScript 检查。
 3. 执行 `pnpm --dir miniprogram build:weapp:prod`，确认生产域名命中且
-   `127.0.0.1` 为零，并检查产物包含 `pages/index/index` 四类页面文件。
+   `127.0.0.1` 为零，并检查产物包含 `pages/index/index` 的 JS/JSON/WXML；登录样式
+   被 Taro 抽取到 `common.wxss` 时，确认 `app.wxss` 引用公共样式且其中存在
+   `.login-page`。
 4. 提交并推送 `codex/m4-release-ready`。本次仅有小程序代码变更，无需服务器部署。
 5. 上传新体验版后，分别验证旧路径二维码和正常启动路径。
 
