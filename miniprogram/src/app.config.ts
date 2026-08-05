@@ -15,6 +15,7 @@ export default defineAppConfig({
     "pages/about/index",
     "pages/user-agreement/index",
     "pages/privacy-policy/index",
+    "pages/index/index",
   ],
   window: {
     navigationStyle: "custom",
