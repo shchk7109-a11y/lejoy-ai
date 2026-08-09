@@ -9,6 +9,7 @@ vi.mock("../_core/env", () => ({
     aiImageProvider: "volc",
     arkApiKey: "test-key",
     arkImageModel: "default-image-model",
+    arkImageEditSize: "1.5K",
     arkStoryImageModel: "story-image-model",
   },
 }));
@@ -32,13 +33,13 @@ describe("Seedream 原图比例编辑", () => {
     vi.unstubAllGlobals();
   });
 
-  it("优先使用 2K 自适应画布，不携带 1:1", async () => {
+  it("优先使用配置的修图尺寸，不携带 1:1", async () => {
     mocks.volcGenerateImage.mockResolvedValue("image-base64");
     await expect(aiEditImage({ imageUrl: "https://cdn.example/photo.jpg", prompt: "保持构图" })).resolves.toBe("image-base64");
     expect(mocks.volcGenerateImage).toHaveBeenCalledWith({
       prompt: "保持构图",
       imageUrls: ["https://cdn.example/photo.jpg"],
-      size: "2K",
+      size: "1.5K",
     });
     expect(mocks.volcGenerateImage.mock.calls[0][0]).not.toHaveProperty("aspectRatio");
   });

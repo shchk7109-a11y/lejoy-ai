@@ -353,8 +353,12 @@ export async function aiEditImage(params: {
   if (provider === "volc") {
     recordAiRequestMetadata("volc", ENV.arkImageModel);
     try {
-      // Seedream 4 使用 2K 分辨率档时会依据参考图自适应画布比例。
-      return await volcGenerateImage({ prompt: params.prompt, imageUrls: [params.imageUrl], size: "2K" });
+      // Seedream 分辨率档依据参考图自适应画布比例；默认 2K，可由部署配置降至 1.5K。
+      return await volcGenerateImage({
+        prompt: params.prompt,
+        imageUrls: [params.imageUrl],
+        size: ENV.arkImageEditSize,
+      });
     } catch (error) {
       if (!isUnsupportedAdaptiveSizeError(error)) throw error;
       const response = await fetch(params.imageUrl);
