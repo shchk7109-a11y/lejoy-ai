@@ -39,6 +39,7 @@ export const ENV = {
   arkApiKey: process.env.ARK_API_KEY ?? "",
   arkBaseUrl: process.env.ARK_BASE_URL ?? "https://ark.cn-beijing.volces.com/api/v3",
   arkImageModel: process.env.ARK_IMAGE_MODEL ?? "doubao-seedream-4-0-250828", // 上控制台模型广场核实最新版本号
+  arkImageEditMaxEdge: process.env.ARK_IMAGE_EDIT_MAX_EDGE ?? "",
   arkImageEditSize: process.env.ARK_IMAGE_EDIT_SIZE ?? "2K",
   arkStoryImageModel: process.env.ARK_STORY_IMAGE_MODEL ?? process.env.ARK_IMAGE_MODEL ?? "doubao-seedream-4-0-250828",
   arkImageWatermark: process.env.ARK_IMAGE_WATERMARK !== "false", // AIGC标识合规，默认开

@@ -21,7 +21,8 @@ import {
   nearestSupportedAspectRatio,
   AspectRatio,
 } from "./volcImageClient";
-import { readImageDimensions } from "./imageDimensions";
+import { readImageDimensions, type ImageDimensions } from "./imageDimensions";
+import { fitImageEditSize, resolveImageEditMaxEdge } from "./imageEditSize";
 import { dashscopeTTS, dashscopeASR, resolveAliTtsProfile } from "./aliVoiceClient";
 import { invokeMiniMaxText, invokeMiniMaxImage, invokeMiniMaxTTS } from "./minimaxClient";
 
@@ -344,6 +345,14 @@ export async function aiGenerateImage(params: {
 }
 
 /** 图生图/修图（照片修复、艺术风格化），imageUrl 需公网可访问，返回 base64 */
+async function loadRemoteImageDimensions(imageUrl: string): Promise<ImageDimensions> {
+  const response = await fetch(imageUrl);
+  if (!response.ok) throw new Error(`原图尺寸读取失败（${response.status}）`);
+  const dimensions = readImageDimensions(Buffer.from(await response.arrayBuffer()));
+  if (!dimensions) throw new Error("无法识别原图尺寸，已停止处理以避免裁切构图");
+  return dimensions;
+}
+
 export async function aiEditImage(params: {
   prompt: string;
   imageUrl: string;
@@ -352,19 +361,23 @@ export async function aiEditImage(params: {
 
   if (provider === "volc") {
     recordAiRequestMetadata("volc", ENV.arkImageModel);
+    const maxEdge = resolveImageEditMaxEdge(ENV.arkImageEditMaxEdge, ENV.arkImageEditSize);
+    let dimensions: ImageDimensions | undefined;
+    let size = ENV.arkImageEditSize;
+    if (maxEdge) {
+      dimensions = await loadRemoteImageDimensions(params.imageUrl);
+      size = fitImageEditSize(dimensions.width, dimensions.height, maxEdge);
+    }
     try {
-      // Seedream 分辨率档依据参考图自适应画布比例；默认 2K，可由部署配置降至 1.5K。
+      // 固定像素档需先按原图比例计算，避免横图被强制拉成竖图。
       return await volcGenerateImage({
         prompt: params.prompt,
         imageUrls: [params.imageUrl],
-        size: ENV.arkImageEditSize,
+        size,
       });
     } catch (error) {
       if (!isUnsupportedAdaptiveSizeError(error)) throw error;
-      const response = await fetch(params.imageUrl);
-      if (!response.ok) throw new Error(`原图尺寸读取失败（${response.status}）`);
-      const dimensions = readImageDimensions(Buffer.from(await response.arrayBuffer()));
-      if (!dimensions) throw new Error("无法识别原图尺寸，已停止处理以避免裁切构图");
+      dimensions ??= await loadRemoteImageDimensions(params.imageUrl);
       return volcGenerateImage({
         prompt: params.prompt,
         imageUrls: [params.imageUrl],

@@ -9,7 +9,8 @@ vi.mock("../_core/env", () => ({
     aiImageProvider: "volc",
     arkApiKey: "test-key",
     arkImageModel: "default-image-model",
-    arkImageEditSize: "1.5K",
+    arkImageEditMaxEdge: "1536",
+    arkImageEditSize: "1152x1536",
     arkStoryImageModel: "story-image-model",
   },
 }));
@@ -27,34 +28,56 @@ vi.mock("./minimaxClient", () => ({ invokeMiniMaxText: vi.fn(), invokeMiniMaxIma
 
 import { aiEditImage, aiGenerateImage } from "./gateway";
 
+function stubPng(width: number, height: number) {
+  const png = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png);
+  png.writeUInt32BE(width, 16);
+  png.writeUInt32BE(height, 20);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(png, { status: 200, headers: { "content-type": "image/png" } })));
+}
+
 describe("Seedream 原图比例编辑", () => {
   beforeEach(() => {
     mocks.volcGenerateImage.mockReset();
     vi.unstubAllGlobals();
   });
 
-  it("优先使用配置的修图尺寸，不携带 1:1", async () => {
+  it("竖图按原比例使用 1152x1536，不携带 1:1", async () => {
     mocks.volcGenerateImage.mockResolvedValue("image-base64");
+    stubPng(1200, 1600);
     await expect(aiEditImage({ imageUrl: "https://cdn.example/photo.jpg", prompt: "保持构图" })).resolves.toBe("image-base64");
     expect(mocks.volcGenerateImage).toHaveBeenCalledWith({
       prompt: "保持构图",
       imageUrls: ["https://cdn.example/photo.jpg"],
-      size: "1.5K",
+      size: "1152x1536",
     });
     expect(mocks.volcGenerateImage.mock.calls[0][0]).not.toHaveProperty("aspectRatio");
   });
 
-  it("仅在自适应 size 不受支持时读取原图并映射最近比例", async () => {
+  it("横图按原比例交换为 1536x1152", async () => {
+    mocks.volcGenerateImage.mockResolvedValue("image-base64");
+    stubPng(1600, 1200);
+
+    await expect(aiEditImage({ imageUrl: "https://cdn.example/landscape.png", prompt: "保持构图" })).resolves.toBe("image-base64");
+    expect(mocks.volcGenerateImage).toHaveBeenCalledWith({
+      prompt: "保持构图",
+      imageUrls: ["https://cdn.example/landscape.png"],
+      size: "1536x1152",
+    });
+  });
+
+  it("仅在自适应 size 不受支持时映射最近比例", async () => {
     mocks.volcGenerateImage
       .mockRejectedValueOnce({ response: { status: 400, data: { message: "unsupported size parameter" } } })
       .mockResolvedValueOnce("fallback-base64");
-    const png = Buffer.alloc(24);
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png);
-    png.writeUInt32BE(4032, 16);
-    png.writeUInt32BE(3024, 20);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(png, { status: 200, headers: { "content-type": "image/png" } })));
+    stubPng(4032, 3024);
 
     await expect(aiEditImage({ imageUrl: "https://cdn.example/photo.png", prompt: "保持构图" })).resolves.toBe("fallback-base64");
+    expect(mocks.volcGenerateImage).toHaveBeenNthCalledWith(1, {
+      prompt: "保持构图",
+      imageUrls: ["https://cdn.example/photo.png"],
+      size: "1536x1152",
+    });
     expect(mocks.volcGenerateImage).toHaveBeenNthCalledWith(2, {
       prompt: "保持构图",
       imageUrls: ["https://cdn.example/photo.png"],
@@ -65,8 +88,18 @@ describe("Seedream 原图比例编辑", () => {
   it("其他错误直接抛出，不触发可能重复扣费的降级生成", async () => {
     const error = { response: { status: 503, data: { message: "service unavailable" } } };
     mocks.volcGenerateImage.mockRejectedValue(error);
+    stubPng(1600, 1200);
     await expect(aiEditImage({ imageUrl: "https://cdn.example/photo.jpg", prompt: "保持构图" })).rejects.toBe(error);
     expect(mocks.volcGenerateImage).toHaveBeenCalledTimes(1);
+  });
+
+  it("无法识别原图尺寸时停止处理且不调用模型", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(Buffer.from("not-an-image"), { status: 200 })));
+
+    await expect(aiEditImage({ imageUrl: "https://cdn.example/broken.bin", prompt: "保持构图" })).rejects.toThrow(
+      "无法识别原图尺寸，已停止处理以避免裁切构图",
+    );
+    expect(mocks.volcGenerateImage).not.toHaveBeenCalled();
   });
 });
 
