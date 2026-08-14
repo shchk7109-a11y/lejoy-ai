@@ -30,7 +30,7 @@ const config: UserConfigExport = {
     828: 1.81 / 2,
   },
   sourceRoot: "src",
-  outputRoot: "dist",
+  outputRoot: process.env.TARO_APP_OUTPUT_ROOT || "dist",
   alias: {
     "react$": resolve(miniprogramRoot, "node_modules", "react", "index.js"),
     "react/jsx-runtime$": resolve(miniprogramRoot, "node_modules", "react", "jsx-runtime.js"),

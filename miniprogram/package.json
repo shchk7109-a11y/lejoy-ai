@@ -7,6 +7,8 @@
     "build:weapp": "pnpm run build:weapp:prod",
     "build:weapp:local": "taro build --type weapp",
     "build:weapp:prod": "TARO_APP_API_BASE_URL=https://api.hxzhineng.xyz taro build --type weapp && node scripts/verify-production-build.mjs",
+    "build:handbook:h5": "TARO_APP_API_BASE_URL=http://127.0.0.1:49320 TARO_APP_OUTPUT_ROOT=dist-handbook-h5 taro build --type h5",
+    "capture:handbook": "node ../scripts/training-handbook/capture-screenshots.mjs",
     "check": "tsc --noEmit"
   },
   "dependencies": {
@@ -26,11 +28,14 @@
     "@babel/core": "^7.28.0",
     "@babel/preset-react": "^7.24.1",
     "@tarojs/cli": "4.2.1",
+    "@tarojs/plugin-platform-h5": "4.2.1",
     "@tarojs/webpack5-runner": "4.2.1",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/webpack-env": "^1.18.8",
     "babel-preset-taro": "4.2.1",
+    "miniprogram-automator": "0.12.1",
+    "playwright": "1.62.1",
     "sass": "^1.89.0",
     "typescript": "5.9.3"
   }

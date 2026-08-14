@@ -1,0 +1,14 @@
+{
+  "version": "2026.08",
+  "items": [
+    { "id": "login", "chapter": "基础操作", "path": "pages/login/index", "state": "初始登录页", "caption": "图5-1 登录页：先说明用途，再由顾客主动点击登录", "file": "01-login.png", "privacyChecked": true },
+    { "id": "home-top", "chapter": "基础操作", "path": "pages/home/index", "state": "首页上半屏", "caption": "图5-2 首页上半屏：积分和常用功能入口", "file": "02-home-top.png", "privacyChecked": true },
+    { "id": "home-bottom", "chapter": "基础操作", "path": "pages/home/index", "state": "首页下半屏", "caption": "图5-3 首页下半屏：生活助手、AI万花筒与敬请期待功能", "file": "03-home-bottom.png", "privacyChecked": true },
+    { "id": "profile", "chapter": "基础操作", "path": "pages/profile/index", "state": "我的页面", "caption": "图5-4 我的页面：大字模式、积分明细和使用说明", "file": "04-profile.png", "privacyChecked": true },
+    { "id": "silver-landing", "chapter": "老摄影大师", "path": "pages/silver-lens/index", "state": "两卡落地页", "caption": "图6-1 老摄影大师：智能修图与艺术画室", "file": "05-silver-landing.png", "privacyChecked": true },
+    { "id": "copywriter", "chapter": "暖心文案", "path": "pages/copywriter/index", "state": "第一步场景选择", "caption": "图7-1 暖心文案：一次只问一个问题", "file": "06-copywriter.png", "privacyChecked": true },
+    { "id": "story", "chapter": "AI故事会", "path": "pages/story-time/index", "state": "故事风格选择", "caption": "图8-1 AI故事会：先选故事风格", "file": "07-story.png", "privacyChecked": true },
+    { "id": "life", "chapter": "生活助手", "path": "pages/life-assistant/index", "state": "菜品和识花草入口", "caption": "图9-1 生活助手：输入、语音、拍照三种方式", "file": "08-life.png", "privacyChecked": true },
+    { "id": "kaleidoscope", "chapter": "AI万花筒", "path": "pages/ai-kaleidoscope/index", "state": "首次使用说明", "caption": "图10-1 AI万花筒：先阅读使用边界", "file": "09-kaleidoscope.png", "privacyChecked": true }
+  ]
+}
