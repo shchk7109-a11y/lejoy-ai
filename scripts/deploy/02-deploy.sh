@@ -110,7 +110,9 @@ set_env_value() {
 
 set_env_value NODE_ENV production
 set_env_value DATABASE_URL "${database_url}"
-set_env_value CONTENT_SECURITY off
+if ! grep -Eq '^CONTENT_SECURITY=.+$' "${ENV_FILE}"; then
+  set_env_value CONTENT_SECURITY wechat
+fi
 env_temp="$(mktemp)"
 awk '!/^[[:space:]]*(export[[:space:]]+)?MP_MOCK_LOGIN[[:space:]]*=/' "${ENV_FILE}" > "${env_temp}"
 install -m 0600 "${env_temp}" "${ENV_FILE}"

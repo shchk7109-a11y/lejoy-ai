@@ -56,6 +56,14 @@ describe("D1 部署脚本契约", () => {
     expect(ecosystem).toContain("instances: 1");
   });
 
+  it("02-deploy 保留已有内容安全配置，缺失或为空时默认微信审核", () => {
+    const source = deployFile("02-deploy.sh");
+    expect(source).not.toContain("set_env_value CONTENT_SECURITY off");
+    expect(source).toContain("if ! grep -Eq '^CONTENT_SECURITY=.+$' \"${ENV_FILE}\"; then");
+    expect(source).toContain("set_env_value CONTENT_SECURITY wechat");
+    expect(source).toMatch(/set_env_value CONTENT_SECURITY wechat\s+fi\s+env_temp=/);
+  });
+
   it("03-nginx-ssl 配置代理限制、HTTPS 与自动续期安装路径", () => {
     const source = deployFile("03-nginx-ssl.sh");
     expect(source).toContain("client_max_body_size 20m");
