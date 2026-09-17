@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Text, View } from "@tarojs/components";
 import { Button } from "@nutui/nutui-react-taro";
+import Taro from "@tarojs/taro";
 import { normalizeApiError, type MpApiError } from "../../services/request-policy";
 import "./index.scss";
 
@@ -48,7 +49,9 @@ export function ErrorState({
       <Text className="error-state__title">{error.title}</Text>
       <Text className="error-state__message">{error.message}</Text>
       {error.helpText ? <Text className="error-state__help">{error.helpText}</Text> : null}
-      <Button block size="xlarge" type="primary" onClick={onRetry}>手动重试</Button>
+      {error.kind === "insufficient_credits" ? (
+        <Button block size="xlarge" type="primary" onClick={() => Taro.navigateTo({ url: "/pages/credits/index" })}>前往积分中心</Button>
+      ) : <Button block size="xlarge" type="primary" onClick={onRetry}>手动重试</Button>}
       <View className="error-state__dismiss clickable" onClick={onDismiss}><Text>先返回当前页面</Text></View>
     </View>
   );

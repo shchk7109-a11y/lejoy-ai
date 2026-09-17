@@ -48,6 +48,11 @@ export default function ProfilePage() {
           </View>
         </View>
 
+        <View className="about-card clickable" onClick={() => Taro.navigateTo({ url: "/pages/credits/index" })}>
+          <View><Text className="about-card__title">积分中心</Text><Text className="about-card__version">兑换店长赠送的积分 · 查看明细</Text></View>
+          <Text className="about-card__arrow">›</Text>
+        </View>
+
         <View className="large-text-card">
           <View className="large-text-card__copy">
             <Text className="large-text-card__title">大字模式</Text>

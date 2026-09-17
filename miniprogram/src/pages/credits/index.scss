@@ -1,0 +1,27 @@
+@use "../../styles/tokens.scss" as *;
+
+.credits-page { min-height: 100vh; background: $color-page; color: $color-text; }
+.credits-page__content { padding: $page-padding; }
+.credits-balance, .credits-redeem, .credits-how, .credits-history { margin-bottom: 30rpx; padding: 34rpx; border: 3rpx solid $color-border; border-radius: $radius-card; background: $color-surface; box-shadow: $shadow-card; }
+.credits-balance { background: $color-primary-soft; text-align: center; }
+.credits-balance__label, .credits-balance__number, .credits-balance__hint { display: block; }
+.credits-balance__label { font-size: $font-title; font-weight: 800; }
+.credits-balance__number { margin: 12rpx 0; color: $color-primary-strong; font-size: 88rpx; font-weight: 900; }
+.credits-balance__hint { color: $color-secondary; font-size: $font-secondary; }
+.credits-page__title { display: block; margin-bottom: 18rpx; font-size: $font-title; font-weight: 800; }
+.credits-page__body { display: block; margin: 12rpx 0; color: $color-secondary; font-size: $font-body; line-height: 1.55; }
+.credits-redeem__input { box-sizing: border-box; width: 100%; min-height: $button-main-height; margin: 28rpx 0 20rpx; padding: 20rpx 24rpx; border: 3rpx solid $color-border; border-radius: 24rpx; background: #fff; color: $color-text; font-size: $font-button; letter-spacing: 2rpx; }
+.credits-redeem__button { width: 100%; min-height: $button-main-height; border: 0; border-radius: 24rpx; background: $color-primary; color: #fff; font-size: $font-button; font-weight: 800; }
+.credits-redeem__button[disabled] { background: $color-disabled; color: $color-disabled-text; }
+.credits-redeem__success, .credits-redeem__error { display: block; margin-top: 18rpx; font-size: $font-body; font-weight: 800; line-height: 1.5; }
+.credits-redeem__success { color: #166534; }
+.credits-redeem__error { color: $color-danger; }
+.credits-history__row { min-height: 128rpx; display: flex; align-items: center; justify-content: space-between; gap: 20rpx; border-top: 2rpx solid $color-border; }
+.credits-history__description, .credits-history__time, .credits-history__positive, .credits-history__negative { display: block; }
+.credits-history__description { font-size: $font-body; font-weight: 700; }
+.credits-history__time { color: $color-muted; font-size: $font-secondary; }
+.credits-history__right { text-align: right; }
+.credits-history__positive, .credits-history__negative { font-size: $font-button; font-weight: 900; }
+.credits-history__positive { color: #166534; }
+.credits-history__negative { color: $color-primary-strong; }
+.credits-page__refresh { width: 100%; min-height: $touch-min; border: 3rpx solid $color-primary; border-radius: 24rpx; background: #fff; color: $color-primary-strong; font-size: $font-button; font-weight: 800; }

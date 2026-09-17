@@ -40,7 +40,7 @@ const ERROR_COPY: Record<MpErrorKind, Omit<MpApiError, "name" | "kind" | "code">
   insufficient_credits: {
     title: "积分不足",
     message: "当前积分不够，暂时无法使用这项功能。",
-    helpText: "如何获取积分：TODO（运营配置积分获取方式）",
+    helpText: "到店可向店长免费领取兑换码，在积分中心领取积分。暂不支持在线充值。",
   },
   content_rejected: {
     title: "内容未通过安全检查",

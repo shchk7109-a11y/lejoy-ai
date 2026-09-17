@@ -57,6 +57,10 @@
 .error-state .nut-button {
   min-height: $button-main-height;
   white-space: normal;
+  background: $color-primary;
+  border-color: $color-primary;
+  color: #ffffff;
+  font-size: $font-button;
 }
 
 .error-state__dismiss {

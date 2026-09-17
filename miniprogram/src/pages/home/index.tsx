@@ -53,7 +53,7 @@ export default function HomePage() {
     <View className="home-page">
       <View className="home-nav">
         <View className="account-pill">
-          <View className="account-pill__credits clickable" onClick={() => Taro.navigateTo({ url: "/pages/profile/index" })}>
+          <View className="account-pill__credits clickable" onClick={() => Taro.navigateTo({ url: "/pages/credits/index" })}>
             <View className="account-pill__coin"><Text>¥</Text></View>
             <Text className="account-pill__number">{user?.credits ?? "--"}</Text>
           </View>
@@ -73,7 +73,7 @@ export default function HomePage() {
           <View className="zero-credit-tip">
             <Text className="zero-credit-tip__title">积分暂时为 0</Text>
             <Text className="zero-credit-tip__body">部分 AI 功能需要积分，当前可先查看功能介绍。</Text>
-            <Text className="zero-credit-tip__help">如何获取积分：TODO（运营配置积分获取方式）</Text>
+            <Text className="zero-credit-tip__help clickable" onClick={() => Taro.navigateTo({ url: "/pages/credits/index" })}>到店向店长免费领取兑换码，点此进入积分中心</Text>
           </View>
         ) : null}
         <View className="module-list">

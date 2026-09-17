@@ -31,7 +31,7 @@ export type MpModule = {
 export type CreditTransaction = {
   id: number;
   amount: number;
-  type: "consume" | "recharge" | "register";
+  type: "consume" | "recharge" | "register" | "redeem";
   feature?: string | null;
   description?: string | null;
   balanceAfter: number;
@@ -175,6 +175,9 @@ export const mpApi = {
   generateCopywriter: (data: { scenario: string; relationship: string; tone: string; customContext?: string }, operationId?: string) =>
     request<{ wishes: string[]; credits: number }>("/api/mp/copywriter/generate", { method: "POST", data, retry: "never", operationId }),
   creditHistory: () => request<{ transactions: CreditTransaction[] }>("/api/mp/credits/history"),
+  redeemCredits: (code: string) => request<{ awardedCredits: number; balance: number; transactionId: number }>("/api/mp/credits/redeem", {
+    method: "POST", data: { code }, retry: "never",
+  }),
   uploadImage: (data: { base64: string; mimeType: "image/jpeg" | "image/png" | "image/webp" }) =>
     request<{ url: string; fileKey: string; securityStatus: MediaSecurityStatus }>("/api/mp/upload/image", { method: "POST", data, retry: "never" }),
   uploadAudio: (data: { base64: string; mimeType: "audio/mpeg" }) =>
