@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerMpRoutes } from "../mp";
 import { startStoryReferenceCleanup } from "../mp/story-reference-cleanup";
+import { createHqAuthRouter } from "../hq/auth-routes";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -39,6 +40,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // 微信小程序 REST API（与现有 tRPC 并行，互不替换）
   registerMpRoutes(app);
+  // 总部后台独立认证，不继承小程序 JWT 或旧 H5 OAuth 身份。
+  app.use("/api/hq", createHqAuthRouter());
   startStoryReferenceCleanup();
   // tRPC API
   app.use(
