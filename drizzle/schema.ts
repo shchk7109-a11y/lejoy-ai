@@ -44,8 +44,9 @@ export const creditTransactions = mysqlTable("credit_transactions", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(), // 关联用户ID
   amount: int("amount").notNull(), // 积分变动数量（正数为增加，负数为消耗）
-  type: mysqlEnum("type", ["consume", "recharge", "register"]).notNull(), // 交易类型
+  type: mysqlEnum("type", ["consume", "recharge", "register", "redeem"]).notNull(), // 交易类型
   feature: varchar("feature", { length: 100 }), // 功能模块名称，如 "photo_restore", "story_generation"
+  creditCodeId: int("creditCodeId").unique(), // 兑换码流水一一对应，其他类型为 NULL
   description: text("description"), // 交易描述
   balanceAfter: int("balanceAfter").notNull(), // 交易后余额
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -53,6 +54,72 @@ export const creditTransactions = mysqlTable("credit_transactions", {
 
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type InsertCreditTransaction = typeof creditTransactions.$inferInsert;
+
+/** 总部后台身份与小程序用户身份完全独立。 */
+export const hqAdminAccounts = mysqlTable("hq_admin_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  username: varchar("username", { length: 80 }).notNull().unique(),
+  passwordHash: varchar("passwordHash", { length: 255 }).notNull(),
+  totpSecretEncrypted: text("totpSecretEncrypted").notNull(),
+  mustChangePassword: int("mustChangePassword").default(1).notNull(),
+  disabled: int("disabled").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const hqAdminSessions = mysqlTable("hq_admin_sessions", {
+  id: int("id").autoincrement().primaryKey(),
+  adminId: int("adminId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  lastUsedAt: timestamp("lastUsedAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  revokedAt: timestamp("revokedAt"),
+});
+
+export const stores = mysqlTable("stores", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  name: varchar("name", { length: 160 }).notNull(),
+  enabled: int("enabled").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const creditCodeBatches = mysqlTable("credit_code_batches", {
+  id: int("id").autoincrement().primaryKey(),
+  storeId: int("storeId").notNull(),
+  amount: int("amount").notNull(),
+  quantity: int("quantity").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  purpose: mysqlEnum("purpose", ["purchase", "promotion"]).notNull(),
+  receiptRef: varchar("receiptRef", { length: 160 }),
+  status: mysqlEnum("status", ["pending", "active", "revoked"]).default("pending").notNull(),
+  createdBy: int("createdBy").notNull(),
+  activatedBy: int("activatedBy"),
+  revokedBy: int("revokedBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  activatedAt: timestamp("activatedAt"),
+  revokedAt: timestamp("revokedAt"),
+});
+
+export const creditCodes = mysqlTable("credit_codes", {
+  id: int("id").autoincrement().primaryKey(),
+  batchId: int("batchId").notNull(),
+  codeHash: varchar("codeHash", { length: 64 }).notNull().unique(),
+  status: mysqlEnum("status", ["unused", "redeemed", "revoked"]).default("unused").notNull(),
+  redeemedBy: int("redeemedBy"),
+  redeemedAt: timestamp("redeemedAt"),
+});
+
+export const creditCodeBatchEvents = mysqlTable("credit_code_batch_events", {
+  id: int("id").autoincrement().primaryKey(),
+  batchId: int("batchId").notNull(),
+  adminId: int("adminId").notNull(),
+  action: mysqlEnum("action", ["created", "activated", "revoked"]).notNull(),
+  quantity: int("quantity").notNull(),
+  reason: varchar("reason", { length: 500 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 /**
  * 微信异步媒体内容安全任务
