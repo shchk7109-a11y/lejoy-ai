@@ -11,7 +11,11 @@ import StoryTime from "./pages/StoryTime";
 import LifeAssistant from "./pages/LifeAssistant";
 import AIKaleidoscope from "./pages/AIKaleidoscope";
 import Profile from "./pages/Profile";
-import Admin from "./pages/Admin";
+import Hq from "./pages/Hq";
+
+function LegacyAdminNotice() {
+  return <main className="mx-auto max-w-xl p-8 text-stone-800"><h1 className="mb-4 text-2xl font-bold">旧管理入口已停用</h1><p>总部积分配码已迁移到独立后台，旧 H5 登录状态不会继承。</p><a className="mt-6 inline-block rounded-xl bg-amber-600 px-5 py-3 font-semibold text-white" href="/hq">前往总部后台登录</a></main>;
+}
 
 function Router() {
   return (
@@ -23,7 +27,8 @@ function Router() {
       <Route path="/life-assistant" component={LifeAssistant} />
       <Route path="/ai-kaleidoscope" component={AIKaleidoscope} />
       <Route path="/profile" component={Profile} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/admin" component={LegacyAdminNotice} />
+      <Route path="/hq" component={Hq} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -10,6 +10,7 @@ import { serveStatic, setupVite } from "./vite";
 import { registerMpRoutes } from "../mp";
 import { startStoryReferenceCleanup } from "../mp/story-reference-cleanup";
 import { createHqAuthRouter } from "../hq/auth-routes";
+import { createHqBatchRouter } from "../hq/batch-routes";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -42,6 +43,7 @@ async function startServer() {
   registerMpRoutes(app);
   // 总部后台独立认证，不继承小程序 JWT 或旧 H5 OAuth 身份。
   app.use("/api/hq", createHqAuthRouter());
+  app.use("/api/hq", createHqBatchRouter());
   startStoryReferenceCleanup();
   // tRPC API
   app.use(

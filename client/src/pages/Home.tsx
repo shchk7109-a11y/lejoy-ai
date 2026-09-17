@@ -100,12 +100,12 @@ export default function Home() {
         </div>
 
         {user?.role === "admin" && (
-          <Link href="/admin">
+          <Link href="/hq">
             <div className="bg-amber-500 text-white rounded-2xl p-4 flex items-center gap-3 hover:bg-amber-600 transition-colors cursor-pointer mt-4">
               <Settings className="w-6 h-6" />
               <div>
-                <p className="font-bold">管理员后台</p>
-                <p className="text-amber-100 text-xs">会员管理 · 积分增送 · 模型配置</p>
+                <p className="font-bold">总部积分后台</p>
+                <p className="text-amber-100 text-xs">需使用独立的总部账号登录</p>
               </div>
               <ChevronRight className="w-5 h-5 text-amber-100 ml-auto" />
             </div>
