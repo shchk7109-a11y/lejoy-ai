@@ -46,7 +46,10 @@ export function createHqAuthStore(db: Database) {
       return Number(result[0].insertId);
     },
     async changePassword(accountId: number, passwordHash: string) {
-      await db.update(hqAdminAccounts).set({ passwordHash, mustChangePassword: 0 }).where(eq(hqAdminAccounts.id, accountId));
+      await db.transaction(async tx => {
+        await tx.update(hqAdminAccounts).set({ passwordHash, mustChangePassword: 0 }).where(eq(hqAdminAccounts.id, accountId));
+        await tx.update(hqAdminSessions).set({ revokedAt: new Date() }).where(eq(hqAdminSessions.adminId, accountId));
+      });
     },
     async rotateTotp(accountId: number, totpSecretEncrypted: string) {
       await db.transaction(async tx => {

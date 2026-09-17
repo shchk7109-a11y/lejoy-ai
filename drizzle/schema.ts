@@ -115,7 +115,7 @@ export const creditCodeBatchEvents = mysqlTable("credit_code_batch_events", {
   id: int("id").autoincrement().primaryKey(),
   batchId: int("batchId").notNull(),
   adminId: int("adminId").notNull(),
-  action: mysqlEnum("action", ["created", "activated", "revoked"]).notNull(),
+  action: mysqlEnum("action", ["created", "activated", "delivery_confirmed", "revoked"]).notNull(),
   quantity: int("quantity").notNull(),
   reason: varchar("reason", { length: 500 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

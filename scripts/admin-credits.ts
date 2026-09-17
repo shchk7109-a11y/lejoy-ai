@@ -73,6 +73,9 @@ export function validateAdminCreditsOperator(value: string | undefined): string 
   if (!value || !/^[a-zA-Z0-9_-]{3,80}$/.test(value)) throw new Error("请先设置 ADMIN_CREDITS_OPERATOR 操作者标识");
   return value;
 }
+export function auditedRechargeDescription(operator: string, note: string): string {
+  return `人工补分[操作者:${validateAdminCreditsOperator(operator)}] ${note.trim()}`.slice(0, 500);
+}
 
 async function confirmRechargeTarget(command: Extract<AdminCreditsCommand, { kind: "recharge" }>): Promise<void> {
   if (process.getuid?.() !== 0) throw new Error("人工补分仅允许服务器 root 交互操作");
@@ -167,8 +170,12 @@ async function main(): Promise<number> {
       const operator = validateAdminCreditsOperator(process.env.ADMIN_CREDITS_OPERATOR);
       await confirmRechargeTarget(command);
       appendRechargeAudit({ status: "intent", operator, userId: command.userId, amount: command.amount, reason: command.note });
-      await runAdminCredits(command, productionDependencies);
-      appendRechargeAudit({ status: "completed", operator, userId: command.userId, amount: command.amount, reason: command.note });
+      await runAdminCredits({ ...command, note: auditedRechargeDescription(operator, command.note) }, productionDependencies);
+      try { appendRechargeAudit({ status: "completed", operator, userId: command.userId, amount: command.amount, reason: command.note }); }
+      catch {
+        console.error("补分已执行，但审计文件写入失败；先核对积分流水，禁止重试本笔补分。");
+        return 1;
+      }
       return 0;
     }
     await runAdminCredits(command, productionDependencies);

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button, Input, Text, View } from "@tarojs/components";
-import Taro, { useDidShow } from "@tarojs/taro";
+import { useDidShow } from "@tarojs/taro";
 import { PageHeader } from "../../components/PageHeader";
 import { mpApi, type CreditTransaction, type MpUser } from "../../services/api";
 import { normalizeApiError } from "../../services/request-policy";
@@ -37,9 +37,16 @@ export default function CreditsPage() {
     setBusy(true); setFeedback("");
     try {
       const result = await mpApi.redeemCredits(normalized);
-      const [currentUser, history] = await Promise.all([mpApi.me(), mpApi.creditHistory()]);
-      setUser(currentUser); setTransactions(history.transactions);
-      setCode(""); setSuccess(true); setFeedback(`领取成功，获得 ${result.awardedCredits} 积分！当前余额 ${currentUser.credits} 分。`);
+      // 服务端已提交事务；后续 GET 失败不能把已入账的积分误报为兑换失败。
+      setUser(current => current ? { ...current, credits: result.balance } : current);
+      setCode(""); setSuccess(true);
+      setFeedback(`领取成功，获得 ${result.awardedCredits} 积分！当前余额 ${result.balance} 分。`);
+      try {
+        const [currentUser, history] = await Promise.all([mpApi.me(), mpApi.creditHistory()]);
+        setUser(currentUser); setTransactions(history.transactions);
+      } catch {
+        setFeedback(`领取成功，获得 ${result.awardedCredits} 积分！当前余额 ${result.balance} 分。明细暂未刷新，可稍后点“刷新余额与明细”。`);
+      }
     } catch (error) {
       const normalizedError = normalizeApiError(error);
       setSuccess(false); setFeedback(redeemErrorMessage(normalizedError.code));

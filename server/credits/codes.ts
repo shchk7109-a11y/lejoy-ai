@@ -7,7 +7,7 @@ import { getDb } from "../db";
 
 type Database = ReturnType<typeof drizzle>;
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-export type BatchInput = { storeId: number; amount: number; quantity: number; expiresAt: Date; purpose: "purchase" | "promotion"; receiptRef: string };
+export type BatchInput = { storeId: number; amount: number; quantity: number; expiresAt: Date; purpose: "purchase" | "promotion"; receiptRef: string; approver?: string; approvalReason?: string };
 
 export function normalizeCode(input: string): string { return input.replace(/[\s-]/g, "").toUpperCase(); }
 export function createCode(): string {
@@ -20,7 +20,8 @@ export function validateBatchInput(input: BatchInput, now = new Date()): BatchIn
       !Number.isSafeInteger(input.quantity) || input.quantity < 1 || input.quantity > 1000 ||
       !(input.expiresAt instanceof Date) || !Number.isFinite(input.expiresAt.getTime()) || input.expiresAt <= now ||
       !["purchase", "promotion"].includes(input.purpose) ||
-      typeof input.receiptRef !== "string" || input.receiptRef.trim().length < 1 || input.receiptRef.length > 160) {
+      typeof input.receiptRef !== "string" || input.receiptRef.trim().length < 1 || input.receiptRef.length > 160 ||
+      (input.purpose === "promotion" && (typeof input.approver !== "string" || input.approver.trim().length < 2 || input.approver.length > 80 || typeof input.approvalReason !== "string" || input.approvalReason.trim().length < 4 || input.approvalReason.length > 200))) {
     throw new Error("批次参数无效：检查门店、面额、数量、有效期及线下凭证或审批编号");
   }
   return input;
@@ -53,9 +54,10 @@ export function createCreditCodeService(db: Database) {
       return db.transaction(async tx => {
         const [store] = await tx.select({ id: stores.id, enabled: stores.enabled }).from(stores).where(eq(stores.id, input.storeId)).limit(1);
         if (!store || !store.enabled) throw new Error("门店不存在或已停用");
-        const result = await tx.insert(creditCodeBatches).values({ ...input, receiptRef: input.receiptRef.trim(), status: "pending", createdBy: adminId });
+        const result = await tx.insert(creditCodeBatches).values({ storeId: input.storeId, amount: input.amount, quantity: input.quantity, expiresAt: input.expiresAt, purpose: input.purpose, receiptRef: input.receiptRef.trim(), status: "pending", createdBy: adminId });
         const id = Number(result[0].insertId);
-        await tx.insert(creditCodeBatchEvents).values({ batchId: id, adminId, action: "created", quantity: input.quantity, reason: input.receiptRef.trim() });
+        const reason = input.purpose === "promotion" ? `审批人:${input.approver!.trim()}; 原因:${input.approvalReason!.trim()}; 审批编号:${input.receiptRef.trim()}` : `线下凭证:${input.receiptRef.trim()}`;
+        await tx.insert(creditCodeBatchEvents).values({ batchId: id, adminId, action: "created", quantity: input.quantity, reason });
         return { id, status: "pending" as const, codeCount: 0 };
       });
     },
@@ -89,11 +91,26 @@ export function createCreditCodeService(db: Database) {
         return { batchId, revokedCount: codesChanged[0].affectedRows };
       });
     },
+    async confirmDelivery(batchId: number, adminId: number, reason: string, now = new Date()) {
+      if (!Number.isSafeInteger(batchId) || batchId <= 0 || typeof reason !== "string" || reason.trim().length < 8 || reason.length > 300) throw new Error("交付确认信息无效");
+      return db.transaction(async tx => {
+        const [batch] = await tx.select().from(creditCodeBatches).where(eq(creditCodeBatches.id, batchId)).limit(1);
+        if (!batch || batch.status !== "active") throw new Error("仅已激活批次可确认交付");
+        const [existing] = await tx.select({ id: creditCodeBatchEvents.id }).from(creditCodeBatchEvents)
+          .where(and(eq(creditCodeBatchEvents.batchId, batchId), eq(creditCodeBatchEvents.action, "delivery_confirmed"))).limit(1);
+        if (existing) throw new Error("该批次已确认交付");
+        await tx.insert(creditCodeBatchEvents).values({ batchId, adminId, action: "delivery_confirmed", quantity: batch.quantity, reason: reason.trim(), createdAt: now });
+        return { batchId, confirmed: true };
+      });
+    },
     async listBatches(now = new Date()) {
       const batches = await db.select().from(creditCodeBatches).orderBy(desc(creditCodeBatches.createdAt)).limit(200);
       return Promise.all(batches.map(async batch => {
-        const codes = await db.select({ status: creditCodes.status }).from(creditCodes).where(eq(creditCodes.batchId, batch.id));
-        return { ...batch, inventory: summarizeInventory(batch, codes.map(code => code.status), now) };
+        const [codes, delivered] = await Promise.all([
+          db.select({ status: creditCodes.status }).from(creditCodes).where(eq(creditCodes.batchId, batch.id)),
+          db.select({ id: creditCodeBatchEvents.id }).from(creditCodeBatchEvents).where(and(eq(creditCodeBatchEvents.batchId, batch.id), eq(creditCodeBatchEvents.action, "delivery_confirmed"))).limit(1),
+        ]);
+        return { ...batch, delivered: delivered.length > 0, inventory: summarizeInventory(batch, codes.map(code => code.status), now) };
       }));
     },
     async listEvents() { return db.select().from(creditCodeBatchEvents).orderBy(desc(creditCodeBatchEvents.createdAt)).limit(200); },

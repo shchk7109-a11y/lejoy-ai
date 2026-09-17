@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, openSync, closeSync, writeFileSync, appendFileSync, writeSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, openSync, closeSync, writeFileSync, appendFileSync, writeSync, statSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
@@ -59,6 +59,10 @@ async function main() {
       reason = (await rl.question("请输入恢复原因（不少于 8 字）: ")).trim();
       if (reason.length < 8 || reason.length > 200) throw new Error("恢复原因长度无效");
     }
+    const auditPath = process.env.HQ_ADMIN_AUDIT_FILE ?? "/root/.lejoy-ai/hq-admin-audit.jsonl";
+    mkdirSync(path.dirname(auditPath), { recursive: true, mode: 0o700 });
+    if (existsSync(auditPath) && (statSync(auditPath).mode & 0o077) !== 0) throw new Error("审计文件权限不安全");
+    appendFileSync(auditPath, JSON.stringify({ at: new Date().toISOString(), action: command.action, username: command.username, reason, status: "intent" }) + "\n", { mode: 0o600 });
     const secret = randomBytes(20);
     const encrypted = encryptSecret(secret, key);
     let accountId: number;
@@ -70,13 +74,14 @@ async function main() {
       accountId = account!.id;
       await store.rotateTotp(accountId, encrypted);
     }
-    const auditPath = process.env.HQ_ADMIN_AUDIT_FILE ?? "/root/.lejoy-ai/hq-admin-audit.jsonl";
-    mkdirSync(path.dirname(auditPath), { recursive: true, mode: 0o700 });
-    appendFileSync(auditPath, JSON.stringify({ at: new Date().toISOString(), action: command.action, accountId, username: command.username, reason }) + "\n", { mode: 0o600 });
+    let auditFailed = false;
+    try { appendFileSync(auditPath, JSON.stringify({ at: new Date().toISOString(), action: command.action, accountId, username: command.username, reason, status: "completed" }) + "\n", { mode: 0o600 }); }
+    catch { auditFailed = true; }
     writeSync(ttyFd, `账号: ${command.username}\n`);
     if (password) writeSync(ttyFd, `一次性初始密码: ${password}\n`);
     writeSync(ttyFd, `TOTP 绑定密钥（仅显示一次）: ${base32(secret)}\n`);
     writeSync(ttyFd, "请立即将绑定信息交给受控人员并妥善保管。\n");
+    if (auditFailed) writeSync(ttyFd, "警告：账号操作已生效，但审计完成记录写入失败；请人工核对，切勿重试。\n");
   } finally {
     rl.close();
     closeSync(ttyFd);

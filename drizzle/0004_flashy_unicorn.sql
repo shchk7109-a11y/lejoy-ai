@@ -1,0 +1,1 @@
+ALTER TABLE `credit_code_batch_events` MODIFY COLUMN `action` enum('created','activated','delivery_confirmed','revoked') NOT NULL;

@@ -17,6 +17,7 @@ function parsedBatch(body: Record<string, unknown>): BatchInput {
   return validateBatchInput({
     storeId: body.storeId, amount: body.amount, quantity: body.quantity,
     expiresAt: new Date(body.expiresAt), purpose: body.purpose as BatchInput["purpose"], receiptRef: body.receiptRef,
+    approver: body.approver as string | undefined, approvalReason: body.approvalReason as string | undefined,
   });
 }
 
@@ -63,6 +64,13 @@ export function createHqBatchRouter(options: Options = {}) {
     if (!Number.isSafeInteger(id) || id <= 0 || typeof reason !== "string" || reason.trim().length < 4) { res.status(400).json({ code: "BAD_REQUEST" }); return; }
     try { res.json(await (await service()).revokeBatch(id, res.locals.hqAdminId, reason)); }
     catch { res.status(409).json({ code: "BATCH_NOT_REVOKED", message: "停用未完成，请刷新批次状态" }); }
+  });
+  router.post("/batches/:id/confirm-delivery", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), async (req, res) => {
+    const id = Number(req.params.id);
+    const reason = req.body?.reason;
+    if (!Number.isSafeInteger(id) || id <= 0 || typeof reason !== "string" || reason.trim().length < 8 || reason.length > 300) { res.status(400).json({ code: "BAD_REQUEST" }); return; }
+    try { res.json(await (await service()).confirmDelivery(id, res.locals.hqAdminId, reason)); }
+    catch { res.status(409).json({ code: "DELIVERY_NOT_CONFIRMED", message: "交付确认未完成，请核对批次状态" }); }
   });
   router.get("/events", async (_req, res) => {
     try { res.setHeader("Cache-Control", "no-store"); res.json({ events: await (await service()).listEvents() }); }

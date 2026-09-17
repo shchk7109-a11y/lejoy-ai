@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, scryptSync } from "node:crypto";
 import { parse as parseCookieHeader, serialize } from "cookie";
 import { NextFunction, Request, Response, Router } from "express";
 import { createHqAuthStore, getHqAuthStore } from "./auth-store";
@@ -7,6 +7,8 @@ import { readHqTotpKey } from "./key";
 
 const SESSION_COOKIE = "__Host-hq_session";
 const CSRF_COOKIE = "__Host-hq_csrf";
+// 固定的非账号哈希，避免未知账号直接跳过 scrypt 带来的计时枚举。
+const DUMMY_PASSWORD_HASH = `scrypt:${"00".repeat(32)}:${scryptSync("not-an-account", Buffer.alloc(32), 64).toString("hex")}`;
 type Store = ReturnType<typeof createHqAuthStore>;
 type Options = { store?: Store; expectedOrigin?: string; totpKey?: Buffer; now?: () => Date };
 
@@ -15,6 +17,12 @@ function originFor(options: Options) { return options.expectedOrigin ?? (process
 function sameOrigin(req: Request, origin: string) { return req.header("origin") === origin; }
 function sendError(res: Response, status: number, code: string, message: string) { res.status(status).json({ code, message }); }
 async function storeFor(options: Options) { return options.store ?? getHqAuthStore(); }
+function setHqCookies(res: Response, token: string, csrf: string) {
+  res.setHeader("Set-Cookie", [
+    serialize(SESSION_COOKIE, token, { path: "/", secure: true, httpOnly: true, sameSite: "strict", maxAge: 8 * 60 * 60 }),
+    serialize(CSRF_COOKIE, csrf, { path: "/", secure: true, httpOnly: false, sameSite: "strict", maxAge: 8 * 60 * 60 }),
+  ]);
+}
 
 export function requireHqAdmin(options: Options = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -49,7 +57,19 @@ export function requireHqReady(_req: Request, res: Response, next: NextFunction)
 
 export function createHqAuthRouter(options: Options = {}) {
   const router = Router();
-  const attempts = new Map<string, { count: number; until: number }>();
+  const byAccount = new Map<string, { count: number; until: number }>();
+  const bySource = new Map<string, { count: number; until: number }>();
+  function expireAndBound(now: number) {
+    for (const map of [byAccount, bySource]) {
+      map.forEach((value, key) => { if (value.until <= now) map.delete(key); });
+      while (map.size > 10_000) map.delete(map.keys().next().value!);
+    }
+  }
+  function failed(map: Map<string, { count: number; until: number }>, key: string, now: number) {
+    const prior = map.get(key);
+    map.delete(key);
+    map.set(key, { count: prior && prior.until > now ? prior.count + 1 : 1, until: now + 15 * 60_000 });
+  }
   router.post("/auth/login", async (req, res) => {
     if (!sameOrigin(req, originFor(options))) { sendError(res, 403, "ORIGIN_REJECTED", "请求来源校验失败"); return; }
     const { username, password, code } = req.body ?? {};
@@ -57,29 +77,29 @@ export function createHqAuthRouter(options: Options = {}) {
       sendError(res, 401, "INVALID_CREDENTIALS", "账号或验证信息不正确"); return;
     }
     const now = options.now?.() ?? new Date();
-    const source = `${req.ip}:${username.toLowerCase()}`;
-    const item = attempts.get(source);
-    if (item && item.count >= 5 && item.until > now.getTime()) { sendError(res, 429, "RATE_LIMITED", "尝试次数过多，请稍后重试"); return; }
+    expireAndBound(now.getTime());
+    const accountKey = username.toLowerCase();
+    const sourceKey = req.ip || req.socket.remoteAddress || "unknown";
+    if ((byAccount.get(accountKey)?.count ?? 0) >= 5 || (bySource.get(sourceKey)?.count ?? 0) >= 5) {
+      sendError(res, 429, "RATE_LIMITED", "尝试次数过多，请稍后重试"); return;
+    }
     try {
       const store = await storeFor(options);
       const account = await store.findAccount(username);
       const key = options.totpKey ?? readHqTotpKey();
-      const valid = account && !account.disabled &&
-        await verifyPassword(password, account.passwordHash) &&
+      const passwordValid = await verifyPassword(password, account && !account.disabled ? account.passwordHash : DUMMY_PASSWORD_HASH);
+      const valid = account && !account.disabled && passwordValid &&
         verifyTotp(decryptSecret(account.totpSecretEncrypted, key), code, now.getTime());
       if (!valid) {
-        const count = item && item.until > now.getTime() ? item.count + 1 : 1;
-        attempts.set(source, { count, until: now.getTime() + 15 * 60_000 });
+        failed(byAccount, accountKey, now.getTime());
+        failed(bySource, sourceKey, now.getTime());
         sendError(res, 401, "INVALID_CREDENTIALS", "账号或验证信息不正确"); return;
       }
-      attempts.delete(source);
+      byAccount.delete(accountKey); bySource.delete(sourceKey);
       const token = randomBytes(32).toString("hex");
       const csrf = randomBytes(24).toString("hex");
       await store.createSession(account.id, sha256(token), now);
-      res.setHeader("Set-Cookie", [
-        serialize(SESSION_COOKIE, token, { path: "/", secure: true, httpOnly: true, sameSite: "strict", maxAge: 8 * 60 * 60 }),
-        serialize(CSRF_COOKIE, csrf, { path: "/", secure: true, httpOnly: false, sameSite: "strict", maxAge: 8 * 60 * 60 }),
-      ]);
+      setHqCookies(res, token, csrf);
       res.setHeader("Cache-Control", "no-store");
       res.json({ username: account.username, mustChangePassword: Boolean(account.mustChangePassword) });
     } catch { sendError(res, 503, "HQ_UNAVAILABLE", "总部后台暂不可用"); }
@@ -102,6 +122,11 @@ export function createHqAuthRouter(options: Options = {}) {
       const account = await store.findAccountById(res.locals.hqAdminId);
       if (!account || !await verifyPassword(oldPassword, account.passwordHash)) { sendError(res, 401, "INVALID_CREDENTIALS", "原密码不正确"); return; }
       await store.changePassword(account.id, await hashPassword(newPassword));
+      const now = options.now?.() ?? new Date();
+      const token = randomBytes(32).toString("hex");
+      const csrf = randomBytes(24).toString("hex");
+      await store.createSession(account.id, sha256(token), now);
+      setHqCookies(res, token, csrf);
       res.json({ ok: true });
     } catch { sendError(res, 503, "HQ_UNAVAILABLE", "总部后台暂不可用"); }
   });

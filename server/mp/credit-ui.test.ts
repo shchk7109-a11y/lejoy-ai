@@ -15,6 +15,8 @@ describe("accessible mini-program credit center", () => {
     expect(api).toContain("/api/mp/credits/redeem");
     expect(api).toContain('retry: "never"');
     expect(page).toContain("await Promise.all([mpApi.me(), mpApi.creditHistory()])");
+    expect(page).toContain("credits: result.balance");
+    expect(page).toContain("明细暂未刷新");
     expect(page).toContain("disabled={busy}");
     expect(page).not.toContain("立即购买");
     expect(home).not.toContain("运营配置积分获取方式");

@@ -6,11 +6,12 @@ function mini(relativePath: string): string {
 }
 
 describe("M4 提审界面打磨", () => {
-  it("首页积分为零时给出清楚的获取指引占位", () => {
+  it("首页积分为零时引导到店免费领码并进入积分中心", () => {
     const home = mini("src/pages/home/index.tsx");
     expect(home).toContain("user?.credits === 0");
     expect(home).toContain("积分暂时为 0");
-    expect(home).toContain("TODO（运营配置积分获取方式）");
+    expect(home).toContain("到店向店长免费领取兑换码，点此进入积分中心");
+    expect(home).toContain('url: "/pages/credits/index"');
   });
 
   it("五个模块结果均有 AIGC 标识，故事朗读标为 AI 合成语音", () => {

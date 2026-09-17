@@ -21,6 +21,7 @@ beforeEach(async () => {
     listStores: vi.fn(async () => []),
     createBatch: vi.fn(async () => ({ id: 7, status: "pending", codeCount: 0 })),
     activateBatch: vi.fn(async () => ({ batchId: 7, codeCount: 1, csv: "兑换码,积分\r\nABCD-EFGH-JKLM,20\r\n" })),
+    confirmDelivery: vi.fn(async () => ({ batchId: 7, confirmed: true })),
     revokeBatch: vi.fn(async () => ({ batchId: 7, revokedCount: 1 })),
     listBatches: vi.fn(async () => []),
     listEvents: vi.fn(async () => []),
@@ -52,5 +53,8 @@ describe("HQ batch API", () => {
     expect(activated.headers.get("content-type")).toContain("text/csv");
     expect(await activated.text()).toContain("ABCD-EFGH-JKLM");
     expect(await (await request("/batches")).text()).not.toContain("ABCD-EFGH-JKLM");
+    const delivery = await request("/batches/7/confirm-delivery", "POST", { reason: "已通过受控渠道交付店长" });
+    expect(delivery.status).toBe(200);
+    expect(service.confirmDelivery).toHaveBeenCalledWith(7, 3, "已通过受控渠道交付店长");
   });
 });

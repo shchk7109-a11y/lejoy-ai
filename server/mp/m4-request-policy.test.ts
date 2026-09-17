@@ -18,7 +18,7 @@ describe("M4 小程序请求策略", () => {
     expect(normalizeApiError({ error: { code: "AI_TIMEOUT" } }).kind).toBe("timeout");
     expect(normalizeApiError({ code: "INSUFFICIENT_CREDITS" })).toMatchObject({
       kind: "insufficient_credits",
-      helpText: "如何获取积分：TODO（运营配置积分获取方式）",
+      helpText: "到店可向店长免费领取兑换码，在积分中心领取积分。暂不支持在线充值。",
     });
     expect(normalizeApiError({ code: "CONTENT_REJECTED" }).kind).toBe("content_rejected");
   });

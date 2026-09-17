@@ -33,6 +33,8 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   const app = express();
+  // 仅信任本机 Nginx 回环代理提供的 X-Forwarded-For，供总部登录按真实来源限速。
+  app.set("trust proxy", "loopback");
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));

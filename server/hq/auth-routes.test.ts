@@ -25,9 +25,9 @@ function fakeStore() {
     findAccount: vi.fn(async (username: string) => username === "hq" ? account : null),
     findAccountById: vi.fn(async () => account),
     findActiveSession: vi.fn(async (hash: string) => active && hash === tokenHash ? { id: 1, adminId: 1, account } : null),
-    createSession: vi.fn(async (_id: number, hash: string) => { tokenHash = hash; }),
+    createSession: vi.fn(async (_id: number, hash: string) => { tokenHash = hash; active = true; }),
     revokeToken: vi.fn(async () => { active = false; }),
-    changePassword: vi.fn(async (_id: number, hash: string) => { passwordHash = hash; mustChangePassword = 0; }),
+    changePassword: vi.fn(async (_id: number, hash: string) => { passwordHash = hash; mustChangePassword = 0; active = false; }),
   };
 }
 
@@ -35,14 +35,14 @@ function cookieHeader(response: Response): string {
   return (response.headers.get("set-cookie") ?? "").split(/, (?=__Host-)/).map(x => x.split(";")[0]).join("; ");
 }
 function csrf(cookie: string): string { return /__Host-hq_csrf=([^;]+)/.exec(cookie)?.[1] ?? ""; }
-async function post(path: string, body: unknown, cookie = "", csrfToken = "", requestOrigin = origin) {
-  return fetch(base + path, { method: "POST", headers: { "content-type": "application/json", origin: requestOrigin, cookie, "x-csrf-token": csrfToken }, body: JSON.stringify(body) });
+async function post(path: string, body: unknown, cookie = "", csrfToken = "", requestOrigin = origin, sourceIp = "") {
+  return fetch(base + path, { method: "POST", headers: { "content-type": "application/json", origin: requestOrigin, cookie, "x-csrf-token": csrfToken, ...(sourceIp ? { "x-forwarded-for": sourceIp } : {}) }, body: JSON.stringify(body) });
 }
 
 beforeEach(async () => {
   store = fakeStore();
   store.setPasswordHash(await hashPassword("valid-password"));
-  const app = express(); app.use(express.json());
+  const app = express(); app.set("trust proxy", "loopback"); app.use(express.json());
   app.use("/api/hq", createHqAuthRouter({ store: store as never, expectedOrigin: origin, totpKey: key, now: () => at }));
   server = createServer(app);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -65,8 +65,9 @@ describe("HQ auth routes", () => {
   });
 
   it("locks source and account after five failed attempts", async () => {
-    for (let i = 0; i < 5; i++) expect((await post("/api/hq/auth/login", { username: "hq", password: "wrong", code: "000000" })).status).toBe(401);
-    expect((await post("/api/hq/auth/login", { username: "hq", password: "valid-password", code: totp(secret, at.getTime()) })).status).toBe(429);
+    for (let i = 0; i < 5; i++) expect((await post("/api/hq/auth/login", { username: "hq", password: "wrong", code: "000000" }, "", "", origin, "203.0.113.5")).status).toBe(401);
+    expect((await post("/api/hq/auth/login", { username: "hq", password: "valid-password", code: totp(secret, at.getTime()) }, "", "", origin, "203.0.113.6")).status).toBe(429);
+    expect((await post("/api/hq/auth/login", { username: "other", password: "x", code: "000000" }, "", "", origin, "203.0.113.5")).status).toBe(429);
   });
 
   it("requires first password change and CSRF, then revokes on logout", async () => {
@@ -77,9 +78,13 @@ describe("HQ auth routes", () => {
     const cookie = cookieHeader(login);
     expect((await fetch(base + "/api/hq/auth/me", { headers: { cookie } })).status).toBe(200);
     expect((await post("/api/hq/auth/password/change", { oldPassword: "valid-password", newPassword: "new-long-password" }, cookie)).status).toBe(403);
-    expect((await post("/api/hq/auth/password/change", { oldPassword: "valid-password", newPassword: "new-long-password" }, cookie, csrf(cookie))).status).toBe(200);
+    const changed = await post("/api/hq/auth/password/change", { oldPassword: "valid-password", newPassword: "new-long-password" }, cookie, csrf(cookie));
+    expect(changed.status).toBe(200);
     expect(store.changePassword).toHaveBeenCalledOnce();
-    expect((await post("/api/hq/auth/logout", {}, cookie, csrf(cookie))).status).toBe(200);
     expect((await fetch(base + "/api/hq/auth/me", { headers: { cookie } })).status).toBe(401);
+    const refreshedCookie = cookieHeader(changed);
+    expect((await fetch(base + "/api/hq/auth/me", { headers: { cookie: refreshedCookie } })).status).toBe(200);
+    expect((await post("/api/hq/auth/logout", {}, refreshedCookie, csrf(refreshedCookie))).status).toBe(200);
+    expect((await fetch(base + "/api/hq/auth/me", { headers: { cookie: refreshedCookie } })).status).toBe(401);
   });
 });
