@@ -16,6 +16,8 @@ import { checkTextSecurity, type SecurityCheckResult } from "./security";
 import { createTextSecurityBatches } from "./text-security-batches";
 import { createM2Router, defaultM2Dependencies } from "./m2-routes";
 import { createM3Router, defaultM3Dependencies, type M3Dependencies } from "./m3-routes";
+import { createCreditRedeemRouter } from "./credit-routes";
+import { redeemCode } from "../credits/redeem";
 import {
   createMpIdempotencyMiddleware,
   createMpRequestLogMiddleware,
@@ -43,6 +45,7 @@ export type MpDependencies = {
   generateWishes: (input: CopywriterInput) => Promise<string[]>;
   checkTextSecurity: (text: string, openId?: string) => Promise<SecurityCheckResult>;
   requestLog?: MpRequestLogSink;
+  redeemCode?: typeof redeemCode;
 };
 
 function defaultDependencies(): MpDependencies {
@@ -148,6 +151,7 @@ export function createMpRouter(
 
   router.use(createM2Router(defaultM2Dependencies(), requireAuth));
   router.use(createM3Router(m3Deps, requireAuth));
+  router.use(createCreditRedeemRouter({ requireAuth, redeem: deps.redeemCode ?? redeemCode }));
 
   router.post("/copywriter/generate", requireAuth, asyncRoute(async (req, res) => {
     const parsed = copywriterInputSchema.safeParse(req.body);
