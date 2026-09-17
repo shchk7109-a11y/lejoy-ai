@@ -20,6 +20,12 @@ describe("管理员积分 CLI 参数", () => {
     const source = readFileSync(moduleUrl, "utf8");
     expect(source).toContain("process.exit(exitCode)");
   });
+  it("人工补分确认使用交互终端，不共享提前关闭的文件描述符", () => {
+    const source = readFileSync(moduleUrl, "utf8");
+    expect(source).toContain("process.stdin.isTTY");
+    expect(source).toContain("input: process.stdin");
+    expect(source).not.toContain("createReadStream");
+  });
 
   it("解析三种受支持命令", async () => {
     const { parseAdminCreditsArgs } = await loadModule();

@@ -2,7 +2,7 @@ import "dotenv/config";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { appendFileSync, createReadStream, createWriteStream, mkdirSync, openSync, closeSync, existsSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { dirname } from "node:path";
 import { users } from "../drizzle/schema";
@@ -79,14 +79,14 @@ export function auditedRechargeDescription(operator: string, note: string): stri
 
 async function confirmRechargeTarget(command: Extract<AdminCreditsCommand, { kind: "recharge" }>): Promise<void> {
   if (process.getuid?.() !== 0) throw new Error("人工补分仅允许服务器 root 交互操作");
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("人工补分必须在交互终端操作");
   const user = await getUserById(command.userId);
   if (!user) throw new Error("用户不存在");
-  const ttyFd = openSync("/dev/tty", "r+");
-  const rl = createInterface({ input: createReadStream("/dev/tty", { fd: ttyFd, autoClose: false }), output: createWriteStream("/dev/tty", { fd: ttyFd, autoClose: false }), terminal: true });
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
   try {
     const answer = await rl.question(`目标用户 ${user.id} / ${maskOpenId(user.openId)}，当前 ${user.credits} 积分；增加 ${command.amount}。输入用户 ID 确认: `);
     if (answer.trim() !== String(user.id)) throw new Error("目标用户确认失败");
-  } finally { rl.close(); closeSync(ttyFd); }
+  } finally { rl.close(); }
 }
 
 function appendRechargeAudit(record: Record<string, unknown>): void {

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { createReadStream, createWriteStream, existsSync, mkdirSync, openSync, closeSync, writeFileSync, appendFileSync, writeSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, closeSync, writeFileSync, appendFileSync, writeSync, statSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
@@ -33,10 +33,10 @@ function base32(buffer: Buffer): string {
 async function main() {
   const command = parseHqAdminCommand(process.argv.slice(2));
   if (process.getuid?.() !== 0) throw new Error("仅允许服务器 root 在交互终端运行");
+  if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error("必须在交互终端运行");
   const ttyFd = openSync("/dev/tty", "r+");
-  const ttyInput = createReadStream("/dev/tty", { fd: ttyFd, autoClose: false });
-  const ttyOutput = createWriteStream("/dev/tty", { fd: ttyFd, autoClose: false });
-  const rl = createInterface({ input: ttyInput, output: ttyOutput, terminal: true });
+  // readline 使用已有终端，不与仅供同步输出秘密的 /dev/tty 文件描述符争用。
+  const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
   try {
     const confirmed = await rl.question(`确认执行总部后台 ${command.action} 操作${command.username ? `（账号 ${command.username}）` : ""}？输入 YES: `);
     if (confirmed !== "YES") throw new Error("操作已取消");
@@ -89,5 +89,6 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  main().catch(() => { process.stderr.write("总部账号操作失败；请核对命令、密钥和数据库状态。\n"); process.exitCode = 1; });
+  void main().then(() => 0).catch(() => { writeSync(2, "总部账号操作失败；请核对命令、密钥和数据库状态。\n"); return 1; })
+    .then(exitCode => process.exit(exitCode));
 }
