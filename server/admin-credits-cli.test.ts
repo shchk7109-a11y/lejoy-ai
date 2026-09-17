@@ -9,6 +9,12 @@ async function loadModule() {
 }
 
 describe("管理员积分 CLI 参数", () => {
+  it("人工补分要求可审计的操作者标识", async () => {
+    const { validateAdminCreditsOperator } = await loadModule();
+    expect(validateAdminCreditsOperator("hq-operator-1")).toBe("hq-operator-1");
+    expect(() => validateAdminCreditsOperator("")).toThrow();
+    expect(() => validateAdminCreditsOperator("匿名 人员")).toThrow();
+  });
   it("命令入口显式退出，避免数据库连接池挂住进程", () => {
     const source = readFileSync(moduleUrl, "utf8");
     expect(source).toContain("process.exit(exitCode)");

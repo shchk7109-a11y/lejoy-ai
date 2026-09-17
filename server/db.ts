@@ -206,18 +206,16 @@ export async function refundCredits(userId: number, amount: number, feature: str
 }
 
 /** 积分充值：管理员给用户增加积分 */
+export async function rechargeCreditsInDatabase(
+  db: ReturnType<typeof drizzle>, userId: number, amount: number, description: string,
+): Promise<number> {
+  return refundCreditsInDatabase(db, userId, amount, "admin_recharge", description || "管理员充值");
+}
+
 export async function rechargeCredits(userId: number, amount: number, description: string): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("数据库不可用");
-  const user = await getUserById(userId);
-  if (!user) throw new Error("用户不存在");
-  const newBalance = user.credits + amount;
-  await db.update(users).set({ credits: newBalance }).where(eq(users.id, userId));
-  await db.insert(creditTransactions).values({
-    userId, amount, type: 'recharge', feature: 'admin_recharge',
-    description: description || '管理员充值', balanceAfter: newBalance,
-  });
-  return newBalance;
+  return rechargeCreditsInDatabase(db, userId, amount, description);
 }
 
 /** 获取用户积分交易记录 */

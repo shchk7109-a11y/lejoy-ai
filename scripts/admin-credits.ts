@@ -2,6 +2,9 @@ import "dotenv/config";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
+import { appendFileSync, createReadStream, createWriteStream, mkdirSync, openSync, closeSync, existsSync, statSync } from "node:fs";
+import { createInterface } from "node:readline/promises";
+import { dirname } from "node:path";
 import { users } from "../drizzle/schema";
 import { getAllUsers, getDb, getUserById, rechargeCredits } from "../server/db";
 
@@ -64,6 +67,30 @@ export function parseAdminCreditsArgs(args: string[]): AdminCreditsCommand {
 
 export function maskOpenId(openId: string): string {
   return `${openId.slice(0, 6)}***`;
+}
+
+export function validateAdminCreditsOperator(value: string | undefined): string {
+  if (!value || !/^[a-zA-Z0-9_-]{3,80}$/.test(value)) throw new Error("请先设置 ADMIN_CREDITS_OPERATOR 操作者标识");
+  return value;
+}
+
+async function confirmRechargeTarget(command: Extract<AdminCreditsCommand, { kind: "recharge" }>): Promise<void> {
+  if (process.getuid?.() !== 0) throw new Error("人工补分仅允许服务器 root 交互操作");
+  const user = await getUserById(command.userId);
+  if (!user) throw new Error("用户不存在");
+  const ttyFd = openSync("/dev/tty", "r+");
+  const rl = createInterface({ input: createReadStream("/dev/tty", { fd: ttyFd, autoClose: false }), output: createWriteStream("/dev/tty", { fd: ttyFd, autoClose: false }), terminal: true });
+  try {
+    const answer = await rl.question(`目标用户 ${user.id} / ${maskOpenId(user.openId)}，当前 ${user.credits} 积分；增加 ${command.amount}。输入用户 ID 确认: `);
+    if (answer.trim() !== String(user.id)) throw new Error("目标用户确认失败");
+  } finally { rl.close(); closeSync(ttyFd); }
+}
+
+function appendRechargeAudit(record: Record<string, unknown>): void {
+  const auditPath = process.env.ADMIN_CREDITS_AUDIT_FILE ?? "/root/.lejoy-ai/admin-credits-audit.jsonl";
+  mkdirSync(dirname(auditPath), { recursive: true, mode: 0o700 });
+  if (existsSync(auditPath) && (statSync(auditPath).mode & 0o077) !== 0) throw new Error("人工补分审计文件权限不安全");
+  appendFileSync(auditPath, JSON.stringify({ at: new Date().toISOString(), ...record }) + "\n", { mode: 0o600 });
 }
 
 export async function requireDatabase<T>(
@@ -136,6 +163,14 @@ const productionDependencies: AdminCreditsDependencies = {
 async function main(): Promise<number> {
   try {
     const command = parseAdminCreditsArgs(process.argv.slice(2));
+    if (command.kind === "recharge") {
+      const operator = validateAdminCreditsOperator(process.env.ADMIN_CREDITS_OPERATOR);
+      await confirmRechargeTarget(command);
+      appendRechargeAudit({ status: "intent", operator, userId: command.userId, amount: command.amount, reason: command.note });
+      await runAdminCredits(command, productionDependencies);
+      appendRechargeAudit({ status: "completed", operator, userId: command.userId, amount: command.amount, reason: command.note });
+      return 0;
+    }
     await runAdminCredits(command, productionDependencies);
     return 0;
   } catch (error) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { consumeCreditsInDatabase, refundCreditsInDatabase } from "./db";
+import { consumeCreditsInDatabase, refundCreditsInDatabase, rechargeCreditsInDatabase } from "./db";
 
 type FakeOptions = {
   affectedRows: number;
@@ -117,5 +117,19 @@ describe("refundCreditsInDatabase", () => {
       description: "照片修复生成失败退还",
       balanceAfter: 100,
     });
+  });
+});
+
+describe("rechargeCreditsInDatabase", () => {
+  it("人工加分在同一事务内原子增加余额并写流水", async () => {
+    const { db, spies } = createFakeDatabase({ affectedRows: 1, balance: 120 });
+    await expect(rechargeCreditsInDatabase(db as never, 7, 20, "授权测试额度")).resolves.toBe(120);
+    expect(spies.transaction).toHaveBeenCalledOnce();
+    expect(spies.insertValues).toHaveBeenCalledWith({ userId: 7, amount: 20, type: "recharge", feature: "admin_recharge", description: "授权测试额度", balanceAfter: 120 });
+  });
+  it("流水失败时事务回滚；拒绝无效数量", async () => {
+    const { db } = createFakeDatabase({ affectedRows: 1, balance: 120, insertError: new Error("ledger failed") });
+    await expect(rechargeCreditsInDatabase(db as never, 7, 20, "测试")).rejects.toThrow("ledger failed");
+    await expect(rechargeCreditsInDatabase(db as never, 7, 0, "测试")).rejects.toThrow();
   });
 });
