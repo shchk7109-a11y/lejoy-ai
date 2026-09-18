@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, uniqueIndex } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -81,13 +81,30 @@ export const stores = mysqlTable("stores", {
   id: int("id").autoincrement().primaryKey(),
   code: varchar("code", { length: 50 }).notNull().unique(),
   name: varchar("name", { length: 160 }).notNull(),
+  sourceFormatId: varchar("sourceFormatId", { length: 100 }),
+  sourceStoreId: varchar("sourceStoreId", { length: 100 }),
+  sourceFormatName: varchar("sourceFormatName", { length: 160 }),
+  lastSyncedAt: timestamp("lastSyncedAt"),
   enabled: int("enabled").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [uniqueIndex("stores_source_pair_unique").on(table.sourceFormatId, table.sourceStoreId)]);
+
+export const storeSyncRuns = mysqlTable("store_sync_runs", {
+  id: int("id").autoincrement().primaryKey(),
+  adminId: int("adminId").notNull(),
+  status: mysqlEnum("status", ["success", "failure"]).notNull(),
+  insertedCount: int("insertedCount").default(0).notNull(),
+  updatedCount: int("updatedCount").default(0).notNull(),
+  disabledCount: int("disabledCount").default(0).notNull(),
+  errorCode: varchar("errorCode", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export const creditCodeBatches = mysqlTable("credit_code_batches", {
   id: int("id").autoincrement().primaryKey(),
-  storeId: int("storeId").notNull(),
+  storeId: int("storeId"),
+  targetKind: mysqlEnum("targetKind", ["store", "hq_staff", "company_test", "trial"]).default("store").notNull(),
+  recipientLabel: varchar("recipientLabel", { length: 160 }),
   amount: int("amount").notNull(),
   quantity: int("quantity").notNull(),
   expiresAt: timestamp("expiresAt").notNull(),

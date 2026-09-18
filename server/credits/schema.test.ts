@@ -25,4 +25,23 @@ describe("积分兑换码数据结构", () => {
     expect(columns).toHaveProperty("creditCodeId");
     expect(columns.type.enumValues).toContain("redeem");
   });
+
+  it("门店镜像以来源业态和门店为身份，并记录人工同步", () => {
+    const columns = getTableColumns(schema.stores);
+    expect(columns).toHaveProperty("sourceFormatId");
+    expect(columns).toHaveProperty("sourceStoreId");
+    expect(columns).toHaveProperty("sourceFormatName");
+    expect(columns).toHaveProperty("lastSyncedAt");
+    expect(columns.sourceFormatId.notNull).toBe(false);
+    expect(columns.sourceStoreId.notNull).toBe(false);
+    expect(getTableName(schema.storeSyncRuns)).toBe("store_sync_runs");
+  });
+
+  it("旧门店批次仍可保留，而新批次可指向具名非门店收件人", () => {
+    const columns = getTableColumns(schema.creditCodeBatches);
+    expect(columns.storeId.notNull).toBe(false);
+    expect(columns).toHaveProperty("targetKind");
+    expect(columns).toHaveProperty("recipientLabel");
+    expect(columns.targetKind.default).toBe("store");
+  });
 });
