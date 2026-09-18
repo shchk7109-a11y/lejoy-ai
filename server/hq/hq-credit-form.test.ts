@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { validateHqCreditForm, type HqCreditForm } from "../../client/src/pages/hq-credit-form";
+import { describe, expect, it, vi } from "vitest";
+import { createHqBatchAndRefresh, validateHqCreditForm, type HqCreditForm } from "../../client/src/pages/hq-credit-form";
 
 const valid: HqCreditForm = { targetKind: "company_test", storeId: "", recipientLabel: "公司测试员", amount: "100", quantity: "1", expiresAt: "2026-12-31", purpose: "promotion", receiptRef: "0001", approver: "孙勇", approvalReason: "总部功能调试" };
 const now = new Date("2026-09-18T00:00:00Z");
@@ -16,5 +16,12 @@ describe("总部批次表单校验", () => {
     expect(validateHqCreditForm({ ...valid, targetKind: "store", storeId: "1", purpose: "purchase", quantity: "1001" }, now)?.field).toBe("quantity");
     expect(validateHqCreditForm({ ...valid, expiresAt: "2026-01-01" }, now)?.field).toBe("expiresAt");
     expect(validateHqCreditForm({ ...valid, receiptRef: "" }, now)?.field).toBe("receiptRef");
+  });
+  it("批次创建成功但列表刷新失败时不把创建结果当成失败", async () => {
+    const create = vi.fn(async () => {});
+    const refresh = vi.fn(async () => { throw new Error("列表暂不可用"); });
+    expect(await createHqBatchAndRefresh(create, refresh)).toBe("refresh_failed");
+    expect(create).toHaveBeenCalledTimes(1);
+    await expect(createHqBatchAndRefresh(async () => { throw new Error("创建失败"); }, refresh)).rejects.toThrow("创建失败");
   });
 });

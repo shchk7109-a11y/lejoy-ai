@@ -24,6 +24,15 @@ export function validateHqCreditForm(form: HqCreditForm, now = new Date()): HqFo
   const promotion = !storeTarget || form.purpose === "promotion";
   if (promotion && (form.approver.trim().length < 2 || form.approver.length > 80)) return { field: "approver", message: "审批人须填写 2 到 80 字" };
   if (promotion && (form.approvalReason.trim().length < 4 || form.approvalReason.length > 200)) return { field: "approvalReason", message: "赠码原因至少填写 4 字" };
-  if (promotion && (`对象:${form.targetKind}; 收件人:${form.recipientLabel.trim()}; 审批人:${form.approver.trim()}; 原因:${form.approvalReason.trim()}; 审批编号:${form.receiptRef.trim()}`).length > 500) return { field: "approvalReason", message: "审批信息过长，请缩短后重试" };
+  const creationReason = promotion
+    ? `${storeTarget ? "" : `对象:${form.targetKind}; 收件人:${form.recipientLabel.trim()}; `}审批人:${form.approver.trim()}; 原因:${form.approvalReason.trim()}; 审批编号:${form.receiptRef.trim()}`
+    : `线下凭证:${form.receiptRef.trim()}`;
+  if (creationReason.length > 500) return { field: "approvalReason", message: "审批信息过长，请缩短后重试" };
   return null;
+}
+
+export async function createHqBatchAndRefresh(create: () => Promise<unknown>, refresh: () => Promise<unknown>): Promise<"refreshed" | "refresh_failed"> {
+  await create();
+  try { await refresh(); return "refreshed"; }
+  catch { return "refresh_failed"; }
 }
