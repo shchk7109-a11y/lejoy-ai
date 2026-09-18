@@ -38,7 +38,7 @@ const config: UserConfigExport = {
   },
   defineConstants: {
     __LEJOY_API_BASE_URL__: JSON.stringify(apiBaseUrl),
-    __LEJOY_MINIPROGRAM_VERSION__: JSON.stringify("1.0.0"),
+    __LEJOY_MINIPROGRAM_VERSION__: JSON.stringify("1.0.1"),
     __LEJOY_RELEASE_CHANNEL__: JSON.stringify(releaseChannel),
   },
   framework: "react",
