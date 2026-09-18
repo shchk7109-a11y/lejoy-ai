@@ -6,6 +6,7 @@ import type { StoreCatalogRow } from "./store-source";
 
 type ExistingStore = { id: number; code: string; name: string; sourceFormatId: string | null; sourceStoreId: string | null; sourceFormatName: string | null; enabled: number };
 type SyncPlan = { add: StoreCatalogRow[]; update: Array<{ id: number; row: StoreCatalogRow }>; disableIds: number[] };
+export type ChangedStore = { name: string; change: "added" | "renamed" | "disabled" | "reactivated" | "updated"; previousName?: string };
 
 function catalogKey(formatId: string, storeId: string): string { return JSON.stringify([formatId, storeId]); }
 
@@ -38,6 +39,17 @@ export async function syncStoreCatalog(db: ReturnType<typeof drizzle>, catalog: 
   return db.transaction(async tx => {
     const existing = await tx.select().from(stores);
     const plan = planStoreSync(existing, catalog);
+    const byId = new Map(existing.map(store => [store.id, store]));
+    const changedStores: ChangedStore[] = [
+      ...plan.add.map(row => ({ name: row.storeName, change: "added" as const })),
+      ...plan.update.map(({ id, row }): ChangedStore => {
+        const before = byId.get(id)!;
+        if (before.enabled !== 1) return { name: row.storeName, change: "reactivated" };
+        if (before.name !== row.storeName) return { name: row.storeName, change: "renamed", previousName: before.name };
+        return { name: row.storeName, change: "updated" };
+      }),
+      ...plan.disableIds.map(id => ({ name: byId.get(id)!.name, change: "disabled" as const })),
+    ];
     for (const row of plan.add) {
       const sourceKey = catalogKey(row.formatId, row.storeId);
       await tx.insert(stores).values({
@@ -57,7 +69,7 @@ export async function syncStoreCatalog(db: ReturnType<typeof drizzle>, catalog: 
     for (const id of plan.disableIds) {
       await tx.update(stores).set({ enabled: 0, lastSyncedAt: now }).where(eq(stores.id, id));
     }
-    const result = { insertedCount: plan.add.length, updatedCount: plan.update.length, disabledCount: plan.disableIds.length, syncedAt: now.toISOString() };
+    const result = { insertedCount: plan.add.length, updatedCount: plan.update.length, disabledCount: plan.disableIds.length, syncedAt: now.toISOString(), changedStores };
     await tx.insert(storeSyncRuns).values({ adminId, status: "success", insertedCount: result.insertedCount, updatedCount: result.updatedCount, disabledCount: result.disabledCount, createdAt: now });
     return result;
   });

@@ -35,8 +35,9 @@ describe("人工门店同步", () => {
 
   it("在一次数据库事务中写入变化和成功审计", async () => {
     const writes: Array<{ table: unknown; values: unknown }> = [];
+    const existing = [...current, { id: 4, code: "LZ_C", name: "回归店", sourceFormatId: "community", sourceStoreId: "return", sourceFormatName: format.formatName, enabled: 0 }];
     const tx = {
-      select: vi.fn(() => ({ from: vi.fn(async () => current) })),
+      select: vi.fn(() => ({ from: vi.fn(async () => existing) })),
       insert: vi.fn((table: unknown) => ({ values: vi.fn(async (values: unknown) => { writes.push({ table, values }); return [{ insertId: 9 }]; }) })),
       update: vi.fn((table: unknown) => ({ set: vi.fn((values: unknown) => ({ where: vi.fn(async () => { writes.push({ table, values }); return [{ affectedRows: 1 }]; }) })) })),
     };
@@ -44,10 +45,29 @@ describe("人工门店同步", () => {
     const result = await syncStoreCatalog(db as never, [
       { ...format, storeId: "nanjing", storeName: "南京新名" },
       { ...format, storeId: "suzhou", storeName: "苏州店" },
+      { ...format, storeId: "return", storeName: "回归店" },
     ], 3);
-    expect(result).toMatchObject({ insertedCount: 1, updatedCount: 1, disabledCount: 2 });
+    expect(result).toMatchObject({ insertedCount: 1, updatedCount: 2, disabledCount: 2 });
+    expect(result.changedStores).toEqual([
+      { name: "苏州店", change: "added" },
+      { name: "南京新名", change: "renamed", previousName: "南京旧名" },
+      { name: "回归店", change: "reactivated" },
+      { name: "旧手工门店", change: "disabled" },
+      { name: "已移除门店", change: "disabled" },
+    ]);
     expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(writes.some(entry => typeof entry.values === "object" && entry.values !== null && "status" in entry.values && entry.values.status === "success")).toBe(true);
+  });
+
+  it("再次同步相同目录时不返回旧的变化清单", async () => {
+    const existing = [{ ...current[0], name: "南京店", sourceFormatName: format.formatName }];
+    const tx = {
+      select: vi.fn(() => ({ from: vi.fn(async () => existing) })),
+      insert: vi.fn(() => ({ values: vi.fn(async () => {}) })),
+    };
+    const db = { transaction: vi.fn(async (fn: (value: typeof tx) => Promise<unknown>) => fn(tx)) };
+    const result = await syncStoreCatalog(db as never, [{ ...format, storeId: "nanjing", storeName: "南京店" }], 3);
+    expect(result.changedStores).toEqual([]);
   });
 
   it("只记录失败码，且最近成功时间不被失败覆盖", async () => {

@@ -29,7 +29,7 @@ beforeEach(async () => {
   };
   storeSync = {
     fetchCatalog: vi.fn(async () => [{ formatId: "community", formatName: "社区店", storeId: "nanjing", storeName: "南京店" }]),
-    sync: vi.fn(async () => ({ insertedCount: 1, updatedCount: 0, disabledCount: 0, syncedAt: "2026-09-18T00:00:00.000Z" })),
+    sync: vi.fn(async () => ({ insertedCount: 1, updatedCount: 0, disabledCount: 0, syncedAt: "2026-09-18T00:00:00.000Z", changedStores: [{ name: "南京店", change: "added" }] })),
     lastSuccess: vi.fn(async () => null),
     recordFailure: vi.fn(async () => {}),
   };
@@ -58,13 +58,13 @@ describe("HQ batch API", () => {
   it("只在总部管理员点击同步时读取来源，不允许再手工建立门店", async () => {
     const listed = await request("/stores");
     expect(listed.status).toBe(200);
-    expect(await listed.json()).toMatchObject({ stores: [], lastSync: null });
+    expect(await listed.json()).toEqual({ stores: [], lastSync: null });
     expect(storeSync.fetchCatalog).not.toHaveBeenCalled();
     expect((await request("/stores", "POST", { code: "FAKE", name: "假门店" })).status).toBe(405);
     expect(service.createStore).not.toHaveBeenCalled();
     const synced = await request("/stores/sync", "POST", {});
     expect(synced.status).toBe(200);
-    expect(await synced.json()).toMatchObject({ insertedCount: 1, updatedCount: 0, disabledCount: 0 });
+    expect(await synced.json()).toMatchObject({ insertedCount: 1, updatedCount: 0, disabledCount: 0, changedStores: [{ name: "南京店", change: "added" }] });
     expect(storeSync.fetchCatalog).toHaveBeenCalledTimes(1);
     expect(storeSync.sync).toHaveBeenCalledWith(expect.any(Array), 3);
   });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createCreditCodeService, getCreditCodeService, type BatchInput, validateBatchInput } from "../credits/codes";
 import { fetchStoreCatalog, type StoreCatalogRow } from "../credits/store-source";
-import { getLastStoreSync, recordStoreSyncFailure, syncStoreCatalog } from "../credits/store-sync";
+import { getLastStoreSync, recordStoreSyncFailure, syncStoreCatalog, type ChangedStore } from "../credits/store-sync";
 import { getDb } from "../db";
 import { createHqAuthStore } from "./auth-store";
 import { requireHqAdmin, requireHqCsrf, requireHqReady } from "./auth-routes";
@@ -12,7 +12,7 @@ type Options = {
   expectedOrigin?: string;
   storeSync?: {
     fetchCatalog: () => Promise<StoreCatalogRow[]>;
-    sync: (rows: StoreCatalogRow[], adminId: number) => Promise<{ insertedCount: number; updatedCount: number; disabledCount: number; syncedAt: string }>;
+    sync: (rows: StoreCatalogRow[], adminId: number) => Promise<{ insertedCount: number; updatedCount: number; disabledCount: number; syncedAt: string; changedStores: ChangedStore[] }>;
     lastSuccess: () => Promise<unknown>;
     recordFailure: (adminId: number, errorCode: string) => Promise<void>;
   };
