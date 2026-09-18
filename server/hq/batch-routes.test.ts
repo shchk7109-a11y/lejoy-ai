@@ -99,4 +99,12 @@ describe("HQ batch API", () => {
     expect(delivery.status).toBe(200);
     expect(service.confirmDelivery).toHaveBeenCalledWith(7, 3, "已通过受控渠道交付店长");
   });
+  it("允许总部按具名非门店对象建待确认赠码，拒绝批量或伪造门店", async () => {
+    const input = { targetKind: "trial", storeId: null, recipientLabel: "受邀体验员甲", amount: 20, quantity: 1, expiresAt: "2027-01-01", purpose: "promotion", receiptRef: "APP-123", approver: "总部负责人", approvalReason: "体验版功能验证" };
+    expect((await request("/batches", "POST", input)).status).toBe(201);
+    expect(service.createBatch).toHaveBeenCalledWith(expect.objectContaining({ targetKind: "trial", storeId: null, recipientLabel: "受邀体验员甲" }), 3);
+    expect((await request("/batches", "POST", { ...input, quantity: 2 })).status).toBe(400);
+    expect((await request("/batches", "POST", { ...input, storeId: 1 })).status).toBe(400);
+    expect(service.createBatch).toHaveBeenCalledTimes(1);
+  });
 });

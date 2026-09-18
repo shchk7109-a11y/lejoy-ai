@@ -20,6 +20,34 @@ describe("credit code rules", () => {
     expect(() => validateBatchInput({ ...input, purpose: "promotion", approver: "", approvalReason: "" }, new Date("2026-01-01"))).toThrow();
     expect(validateBatchInput({ ...input, purpose: "promotion", approver: "总部负责人", approvalReason: "开业活动赠码" }, new Date("2026-01-01"))).toMatchObject({ approver: "总部负责人" });
   });
+
+  it("非门店批次必须是具名、逐人、经审批的赠码", () => {
+    const base = { storeId: null, recipientLabel: "公司测试员 01", amount: 20, quantity: 1, expiresAt: new Date("2027-01-01"), purpose: "promotion" as const, receiptRef: "TEST-APPROVAL-1", approver: "总部负责人", approvalReason: "新功能测试用积分" };
+    for (const targetKind of ["hq_staff", "company_test", "trial"] as const) {
+      expect(validateBatchInput({ ...base, targetKind }, new Date("2026-01-01"))).toMatchObject({ targetKind, storeId: null, quantity: 1 });
+    }
+    for (const invalid of [
+      { ...base, targetKind: "trial", recipientLabel: "" },
+      { ...base, targetKind: "trial", quantity: 2 },
+      { ...base, targetKind: "trial", purpose: "purchase" },
+      { ...base, targetKind: "trial", storeId: 1 },
+      { ...base, targetKind: "trial", approver: "" },
+      { ...base, targetKind: "trial", approvalReason: "" },
+    ]) expect(() => validateBatchInput(invalid as never, new Date("2026-01-01"))).toThrow();
+  });
+
+  it("创建非门店批次时不查询或伪造门店，并留下收件人与审批痕迹", async () => {
+    const inserted: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const db: Record<string, unknown> = {};
+    db.select = vi.fn(() => { throw new Error("非门店不得查门店"); });
+    db.insert = vi.fn((table: unknown) => ({ values: async (values: Record<string, unknown>) => { inserted.push({ table, values }); return [{ insertId: 8 }]; } }));
+    db.transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db));
+    const input = { targetKind: "company_test" as const, storeId: null, recipientLabel: "测试同事 A", amount: 20, quantity: 1, expiresAt: new Date("2027-01-01"), purpose: "promotion" as const, receiptRef: "APP-8", approver: "总部负责人", approvalReason: "公司试用验收" };
+    expect(await createCreditCodeService(db as never).createBatch(input, 3, new Date("2026-01-01"))).toEqual({ id: 8, status: "pending", codeCount: 0 });
+    expect(inserted.find(entry => entry.table === creditCodeBatches)?.values).toMatchObject({ targetKind: "company_test", storeId: null, recipientLabel: "测试同事 A" });
+    expect(String(inserted.find(entry => entry.table === creditCodeBatchEvents)?.values.reason)).toContain("测试同事 A");
+    expect(inserted.some(entry => entry.table === creditCodes)).toBe(false);
+  });
   it("keeps allocated inventory partitioned without counting pending batch as issued", () => {
     expect(summarizeInventory({ status: "pending", expiresAt: new Date("2027-01-01") }, [], new Date("2026-01-01"))).toEqual({ allocated: 0, redeemed: 0, unused: 0, expired: 0, revoked: 0 });
     const summary = summarizeInventory({ status: "active", expiresAt: new Date("2025-01-01") }, ["redeemed", "unused", "revoked"], new Date("2026-01-01"));
@@ -33,7 +61,7 @@ describe("credit code rules", () => {
     const inserted: Array<{ table: unknown; values: unknown }> = [];
     const db: Record<string, unknown> = {};
     let status: "pending" | "active" = "pending";
-    db.select = vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: async () => table === stores ? [{ id: 1, enabled: 1 }] : table === creditCodeBatchEvents ? [] : [{ id: 7, ...input, status }] }) }) }));
+    db.select = vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: async () => table === stores ? [{ id: 1, enabled: 1, sourceFormatId: "community", sourceStoreId: "store-1" }] : table === creditCodeBatchEvents ? [] : [{ id: 7, ...input, status }] }) }) }));
     db.insert = vi.fn((table: unknown) => ({ values: async (values: unknown) => { inserted.push({ table, values }); return [{ insertId: 7 }]; } }));
     db.update = vi.fn(() => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }));
     db.transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(db));

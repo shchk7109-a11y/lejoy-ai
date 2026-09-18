@@ -7,7 +7,7 @@ import { getDb } from "../db";
 
 type Database = ReturnType<typeof drizzle>;
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-export type BatchInput = { storeId: number; amount: number; quantity: number; expiresAt: Date; purpose: "purchase" | "promotion"; receiptRef: string; approver?: string; approvalReason?: string };
+export type BatchInput = { targetKind?: "store" | "hq_staff" | "company_test" | "trial"; storeId: number | null; recipientLabel?: string | null; amount: number; quantity: number; expiresAt: Date; purpose: "purchase" | "promotion"; receiptRef: string; approver?: string; approvalReason?: string };
 
 export function normalizeCode(input: string): string { return input.replace(/[\s-]/g, "").toUpperCase(); }
 export function createCode(): string {
@@ -15,7 +15,14 @@ export function createCode(): string {
   return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8)}`;
 }
 export function validateBatchInput(input: BatchInput, now = new Date()): BatchInput {
-  if (!Number.isSafeInteger(input.storeId) || input.storeId <= 0 ||
+  const kind = input.targetKind ?? "store";
+  const storeTarget = kind === "store";
+  const validTarget = storeTarget
+    ? Number.isSafeInteger(input.storeId) && Number(input.storeId) > 0 && !input.recipientLabel
+    : ["hq_staff", "company_test", "trial"].includes(kind) && input.storeId === null &&
+      typeof input.recipientLabel === "string" && input.recipientLabel.trim().length > 0 && input.recipientLabel.length <= 160 &&
+      input.quantity === 1 && input.purpose === "promotion";
+  if (!validTarget ||
       !Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 1_000_000 ||
       !Number.isSafeInteger(input.quantity) || input.quantity < 1 || input.quantity > 1000 ||
       !(input.expiresAt instanceof Date) || !Number.isFinite(input.expiresAt.getTime()) || input.expiresAt <= now ||
@@ -52,11 +59,14 @@ export function createCreditCodeService(db: Database) {
     async createBatch(input: BatchInput, adminId: number, now = new Date()) {
       validateBatchInput(input, now);
       return db.transaction(async tx => {
-        const [store] = await tx.select({ id: stores.id, enabled: stores.enabled }).from(stores).where(eq(stores.id, input.storeId)).limit(1);
-        if (!store || !store.enabled) throw new Error("门店不存在或已停用");
-        const result = await tx.insert(creditCodeBatches).values({ storeId: input.storeId, amount: input.amount, quantity: input.quantity, expiresAt: input.expiresAt, purpose: input.purpose, receiptRef: input.receiptRef.trim(), status: "pending", createdBy: adminId });
+        const targetKind = input.targetKind ?? "store";
+        if (targetKind === "store") {
+          const [store] = await tx.select({ id: stores.id, enabled: stores.enabled, sourceFormatId: stores.sourceFormatId, sourceStoreId: stores.sourceStoreId }).from(stores).where(eq(stores.id, input.storeId!)).limit(1);
+          if (!store || !store.enabled || !store.sourceFormatId || !store.sourceStoreId) throw new Error("门店不存在、已停用或尚未同步");
+        }
+        const result = await tx.insert(creditCodeBatches).values({ targetKind, storeId: input.storeId, recipientLabel: targetKind === "store" ? null : input.recipientLabel!.trim(), amount: input.amount, quantity: input.quantity, expiresAt: input.expiresAt, purpose: input.purpose, receiptRef: input.receiptRef.trim(), status: "pending", createdBy: adminId });
         const id = Number(result[0].insertId);
-        const reason = input.purpose === "promotion" ? `审批人:${input.approver!.trim()}; 原因:${input.approvalReason!.trim()}; 审批编号:${input.receiptRef.trim()}` : `线下凭证:${input.receiptRef.trim()}`;
+        const reason = input.purpose === "promotion" ? `${targetKind === "store" ? "" : `对象:${targetKind}; 收件人:${input.recipientLabel!.trim()}; `}审批人:${input.approver!.trim()}; 原因:${input.approvalReason!.trim()}; 审批编号:${input.receiptRef.trim()}` : `线下凭证:${input.receiptRef.trim()}`;
         await tx.insert(creditCodeBatchEvents).values({ batchId: id, adminId, action: "created", quantity: input.quantity, reason });
         return { id, status: "pending" as const, codeCount: 0 };
       });

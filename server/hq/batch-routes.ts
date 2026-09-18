@@ -19,12 +19,12 @@ type Options = {
 };
 
 function parsedBatch(body: Record<string, unknown>): BatchInput {
-  if (typeof body.storeId !== "number" || typeof body.amount !== "number" || typeof body.quantity !== "number" ||
+  if ((typeof body.storeId !== "number" && body.storeId !== null) || typeof body.amount !== "number" || typeof body.quantity !== "number" ||
       typeof body.expiresAt !== "string" || typeof body.purpose !== "string" || typeof body.receiptRef !== "string") {
     throw new Error("批次参数缺失");
   }
   return validateBatchInput({
-    storeId: body.storeId, amount: body.amount, quantity: body.quantity,
+    targetKind: body.targetKind as BatchInput["targetKind"], storeId: body.storeId, recipientLabel: body.recipientLabel as string | null | undefined, amount: body.amount, quantity: body.quantity,
     expiresAt: new Date(body.expiresAt), purpose: body.purpose as BatchInput["purpose"], receiptRef: body.receiptRef,
     approver: body.approver as string | undefined, approvalReason: body.approvalReason as string | undefined,
   });
@@ -76,9 +76,9 @@ export function createHqBatchRouter(options: Options = {}) {
   router.post("/batches", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), async (req, res) => {
     let input: BatchInput;
     try { input = parsedBatch(req.body ?? {}); }
-    catch { res.status(400).json({ code: "BAD_REQUEST", message: "请检查门店、面额、数量、有效期和线下凭证／审批编号" }); return; }
+    catch { res.status(400).json({ code: "BAD_REQUEST", message: "请检查发放对象、面额、数量、有效期和线下凭证／审批编号" }); return; }
     try { res.status(201).json(await (await service()).createBatch(input, res.locals.hqAdminId)); }
-    catch { res.status(409).json({ code: "BATCH_NOT_CREATED", message: "批次未建立，请确认门店状态后重试" }); }
+    catch { res.status(409).json({ code: "BATCH_NOT_CREATED", message: "批次未建立，请确认发放对象或门店状态后重试" }); }
   });
   router.post("/batches/:id/activate", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), async (req, res) => {
     const id = Number(req.params.id);
