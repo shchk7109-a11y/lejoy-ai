@@ -14,6 +14,12 @@ export function createCode(): string {
   const chars = Array.from({ length: 12 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
   return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8)}`;
 }
+function creationReason(input: BatchInput): string {
+  const targetKind = input.targetKind ?? "store";
+  return input.purpose === "promotion"
+    ? `${targetKind === "store" ? "" : `对象:${targetKind}; 收件人:${input.recipientLabel!.trim()}; `}审批人:${input.approver!.trim()}; 原因:${input.approvalReason!.trim()}; 审批编号:${input.receiptRef.trim()}`
+    : `线下凭证:${input.receiptRef.trim()}`;
+}
 export function validateBatchInput(input: BatchInput, now = new Date()): BatchInput {
   const kind = input.targetKind ?? "store";
   const storeTarget = kind === "store";
@@ -31,6 +37,7 @@ export function validateBatchInput(input: BatchInput, now = new Date()): BatchIn
       (input.purpose === "promotion" && (typeof input.approver !== "string" || input.approver.trim().length < 2 || input.approver.length > 80 || typeof input.approvalReason !== "string" || input.approvalReason.trim().length < 4 || input.approvalReason.length > 200))) {
     throw new Error("批次参数无效：检查门店、面额、数量、有效期及线下凭证或审批编号");
   }
+  if (creationReason(input).length > 500) throw new Error("审批信息过长，请缩短接收人、原因或审批编号");
   return input;
 }
 
@@ -48,25 +55,18 @@ export function summarizeInventory(batch: { status: "pending" | "active" | "revo
 
 export function createCreditCodeService(db: Database) {
   return {
-    async createStore(input: { code: string; name: string }) {
-      const code = input.code?.trim().toUpperCase();
-      const name = input.name?.trim();
-      if (!code || !/^[A-Z0-9_-]{2,50}$/.test(code) || !name || name.length > 160) throw new Error("门店编号或名称无效");
-      const result = await db.insert(stores).values({ code, name });
-      return { id: Number(result[0].insertId), code, name };
-    },
     async listStores() { return db.select().from(stores).orderBy(stores.id); },
     async createBatch(input: BatchInput, adminId: number, now = new Date()) {
       validateBatchInput(input, now);
       return db.transaction(async tx => {
         const targetKind = input.targetKind ?? "store";
         if (targetKind === "store") {
-          const [store] = await tx.select({ id: stores.id, enabled: stores.enabled, sourceFormatId: stores.sourceFormatId, sourceStoreId: stores.sourceStoreId }).from(stores).where(eq(stores.id, input.storeId!)).limit(1);
+          const [store] = await tx.select({ id: stores.id, enabled: stores.enabled, sourceFormatId: stores.sourceFormatId, sourceStoreId: stores.sourceStoreId }).from(stores).where(eq(stores.id, input.storeId!)).limit(1).for("update");
           if (!store || !store.enabled || !store.sourceFormatId || !store.sourceStoreId) throw new Error("门店不存在、已停用或尚未同步");
         }
         const result = await tx.insert(creditCodeBatches).values({ targetKind, storeId: input.storeId, recipientLabel: targetKind === "store" ? null : input.recipientLabel!.trim(), amount: input.amount, quantity: input.quantity, expiresAt: input.expiresAt, purpose: input.purpose, receiptRef: input.receiptRef.trim(), status: "pending", createdBy: adminId });
         const id = Number(result[0].insertId);
-        const reason = input.purpose === "promotion" ? `${targetKind === "store" ? "" : `对象:${targetKind}; 收件人:${input.recipientLabel!.trim()}; `}审批人:${input.approver!.trim()}; 原因:${input.approvalReason!.trim()}; 审批编号:${input.receiptRef.trim()}` : `线下凭证:${input.receiptRef.trim()}`;
+        const reason = creationReason(input);
         await tx.insert(creditCodeBatchEvents).values({ batchId: id, adminId, action: "created", quantity: input.quantity, reason });
         return { id, status: "pending" as const, codeCount: 0 };
       });

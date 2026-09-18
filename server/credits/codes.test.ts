@@ -3,6 +3,9 @@ import { creditCodeBatchEvents, creditCodeBatches, creditCodes, stores } from ".
 import { createCode, createCreditCodeService, normalizeCode, validateBatchInput, summarizeInventory } from "./codes";
 
 describe("credit code rules", () => {
+  it("不再提供手工建店服务入口", () => {
+    expect("createStore" in createCreditCodeService({} as never)).toBe(false);
+  });
   it("generates non-ambiguous 12-character codes and hashes only normalized values", () => {
     const values = Array.from({ length: 1000 }, () => createCode());
     expect(new Set(values).size).toBe(1000);
@@ -33,6 +36,7 @@ describe("credit code rules", () => {
       { ...base, targetKind: "trial", storeId: 1 },
       { ...base, targetKind: "trial", approver: "" },
       { ...base, targetKind: "trial", approvalReason: "" },
+      { ...base, targetKind: "trial", recipientLabel: "甲".repeat(160), approver: "乙".repeat(80), approvalReason: "丙".repeat(200), receiptRef: "丁".repeat(160) },
     ]) expect(() => validateBatchInput(invalid as never, new Date("2026-01-01"))).toThrow();
   });
 
@@ -61,12 +65,17 @@ describe("credit code rules", () => {
     const inserted: Array<{ table: unknown; values: unknown }> = [];
     const db: Record<string, unknown> = {};
     let status: "pending" | "active" = "pending";
-    db.select = vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: async () => table === stores ? [{ id: 1, enabled: 1, sourceFormatId: "community", sourceStoreId: "store-1" }] : table === creditCodeBatchEvents ? [] : [{ id: 7, ...input, status }] }) }) }));
+    const storeLock = vi.fn();
+    db.select = vi.fn(() => ({ from: (table: unknown) => ({ where: () => ({ limit: () => {
+      const rows = table === stores ? [{ id: 1, enabled: 1, sourceFormatId: "community", sourceStoreId: "store-1" }] : table === creditCodeBatchEvents ? [] : [{ id: 7, ...input, status }];
+      return Object.assign(Promise.resolve(rows), { for: async (strength: string) => { storeLock(strength); return rows; } });
+    } }) }) }));
     db.insert = vi.fn((table: unknown) => ({ values: async (values: unknown) => { inserted.push({ table, values }); return [{ insertId: 7 }]; } }));
     db.update = vi.fn(() => ({ set: () => ({ where: async () => [{ affectedRows: 1 }] }) }));
     db.transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback(db));
     const service = createCreditCodeService(db as never);
     expect(await service.createBatch(input, 3, now)).toEqual({ id: 7, status: "pending", codeCount: 0 });
+    expect(storeLock).toHaveBeenCalledWith("update");
     expect(inserted.some(entry => entry.table === creditCodes)).toBe(false);
     await service.createBatch({ ...input, purpose: "promotion", approver: "总部负责人", approvalReason: "开业活动赠码" }, 3, now);
     expect(inserted.some(entry => entry.table === creditCodeBatchEvents && String((entry.values as { reason?: string }).reason).includes("审批人:总部负责人"))).toBe(true);

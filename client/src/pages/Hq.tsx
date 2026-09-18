@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 type Me = { username: string; mustChangePassword: boolean };
 type Store = { id: number; code: string; name: string; enabled: number; sourceFormatId: string | null; sourceFormatName: string | null };
 type StoreSync = { insertedCount: number; updatedCount: number; disabledCount: number; syncedAt: string };
+type LastStoreSync = { createdAt: string };
 type Inventory = { allocated: number; redeemed: number; unused: number; expired: number; revoked: number };
 type TargetKind = "store" | "hq_staff" | "company_test" | "trial";
 type Batch = { id: number; targetKind: TargetKind; storeId: number | null; recipientLabel: string | null; amount: number; quantity: number; expiresAt: string; purpose: "purchase" | "promotion"; receiptRef: string | null; status: "pending" | "active" | "revoked"; createdAt: string; delivered: boolean; inventory: Inventory };
@@ -37,14 +38,19 @@ export default function Hq() {
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
-  const [lastSync, setLastSync] = useState<StoreSync | null>(null);
+  const [lastSync, setLastSync] = useState<LastStoreSync | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
   const [batchForm, setBatchForm] = useState({ targetKind: "store" as TargetKind, storeId: "", recipientLabel: "", amount: "20", quantity: "10", expiresAt: "", purpose: "purchase" as "purchase" | "promotion", receiptRef: "", approver: "", approvalReason: "" });
+  const groupedStores = Object.entries(stores.reduce<Record<string, Store[]>>((groups, store) => {
+    const name = store.sourceFormatName ?? store.sourceFormatId ?? "历史门店";
+    (groups[name] ??= []).push(store);
+    return groups;
+  }, {}));
 
   const refresh = useCallback(async () => {
     const [s, b, e] = await Promise.all([
-      hqApi<{ stores: Store[]; lastSync: StoreSync | null }>("/api/hq/stores"),
+      hqApi<{ stores: Store[]; lastSync: LastStoreSync | null }>("/api/hq/stores"),
       hqApi<{ batches: Batch[] }>("/api/hq/batches"),
       hqApi<{ events: Event[] }>("/api/hq/events"),
     ]);
@@ -157,7 +163,12 @@ export default function Hq() {
       : me.mustChangePassword ? <form onSubmit={changePassword} className={`${cardClass} mx-auto max-w-lg space-y-4`}><h2 className="text-2xl font-bold">首次登录：修改初始密码</h2><p>完成改密后才能查看或发放兑换码。</p><label className="block">初始密码<input className={inputClass} type="password" value={password} onChange={event => setPassword(event.target.value)} required /></label><label className="block">新密码（至少 12 位）<input className={inputClass} type="password" value={newPassword} minLength={12} onChange={event => setNewPassword(event.target.value)} required /></label><button className={`${buttonClass} w-full`} disabled={busy}>修改密码</button></form>
       : <>
         <section className="grid gap-6 lg:grid-cols-2">
-          <section className={`${cardClass} space-y-3`}><h2 className="text-2xl font-bold">业态与门店</h2><p className="text-stone-600">仅从灵芝水铺 AI 内容裂变系统手动同步，不在此新增门店。</p><button type="button" className={buttonClass} onClick={() => void syncStores()} disabled={busy}>同步门店信息</button><p className="text-stone-600">{lastSync ? `上次成功同步：${new Date(lastSync.syncedAt).toLocaleString("zh-CN")}` : "尚未成功同步"}</p>{stores.length === 0 ? <p>暂无门店，请点击同步门店信息。</p> : <ul className="space-y-2 text-stone-700">{stores.map(store => <li key={store.id} className="rounded-lg border p-2">{store.sourceFormatName ?? store.sourceFormatId ?? "历史门店"} · {store.name}{!store.enabled ? "（停用）" : ""}</li>)}</ul>}</section>
+          <section className={`${cardClass} space-y-3`}>
+            <h2 className="text-2xl font-bold">业态与门店</h2><p className="text-stone-600">仅从灵芝水铺 AI 内容裂变系统手动同步，不在此新增门店。</p>
+            <button type="button" className={buttonClass} onClick={() => void syncStores()} disabled={busy}>同步门店信息</button>
+            <p className="text-stone-600">{lastSync ? `上次成功同步：${new Date(lastSync.createdAt).toLocaleString("zh-CN")}` : "尚未成功同步"}</p>
+            {stores.length === 0 ? <p>暂无门店，请点击同步门店信息。</p> : groupedStores.map(([formatName, entries]) => <div key={formatName} className="rounded-xl border border-stone-200 p-3"><h3 className="text-xl font-semibold">{formatName}</h3><ul className="mt-2 space-y-1 text-stone-700">{entries.map(store => <li key={store.id}>{store.name}{!store.enabled ? "（停用）" : ""}</li>)}</ul></div>)}
+          </section>
           <form onSubmit={addBatch} className={`${cardClass} space-y-3`}>
             <h2 className="text-2xl font-bold">建立待确认批次</h2>
             <div className="grid gap-3 sm:grid-cols-2">

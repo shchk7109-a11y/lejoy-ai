@@ -17,6 +17,8 @@ describe("HQ web portal isolation", () => {
     expect(source).not.toContain("建立门店");
     expect(source).not.toContain("/api/hq/stores\", { method: \"POST\"");
     expect(source).toContain("recipientLabel");
+    expect(source).toContain("lastSync.createdAt");
+    expect(source).toContain("groupedStores");
     expect(source).toContain("company_test");
     expect(source).toContain("trial");
   });
