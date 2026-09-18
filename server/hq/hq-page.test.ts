@@ -10,4 +10,14 @@ describe("HQ web portal isolation", () => {
     expect(source).not.toContain("localStorage");
     expect(source).not.toContain("trpc.admin");
   });
+  it("仅提供手动同步门店，允许具名非门店赠码", () => {
+    const source = readFileSync(new URL("../../client/src/pages/Hq.tsx", import.meta.url), "utf8");
+    expect(source).toContain("同步门店信息");
+    expect(source).toContain("/api/hq/stores/sync");
+    expect(source).not.toContain("建立门店");
+    expect(source).not.toContain("/api/hq/stores\", { method: \"POST\"");
+    expect(source).toContain("recipientLabel");
+    expect(source).toContain("company_test");
+    expect(source).toContain("trial");
+  });
 });

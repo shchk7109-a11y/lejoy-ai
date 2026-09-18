@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 type Me = { username: string; mustChangePassword: boolean };
-type Store = { id: number; code: string; name: string; enabled: number };
+type Store = { id: number; code: string; name: string; enabled: number; sourceFormatId: string | null; sourceFormatName: string | null };
+type StoreSync = { insertedCount: number; updatedCount: number; disabledCount: number; syncedAt: string };
 type Inventory = { allocated: number; redeemed: number; unused: number; expired: number; revoked: number };
-type Batch = { id: number; storeId: number; amount: number; quantity: number; expiresAt: string; purpose: "purchase" | "promotion"; receiptRef: string | null; status: "pending" | "active" | "revoked"; createdAt: string; delivered: boolean; inventory: Inventory };
+type TargetKind = "store" | "hq_staff" | "company_test" | "trial";
+type Batch = { id: number; targetKind: TargetKind; storeId: number | null; recipientLabel: string | null; amount: number; quantity: number; expiresAt: string; purpose: "purchase" | "promotion"; receiptRef: string | null; status: "pending" | "active" | "revoked"; createdAt: string; delivered: boolean; inventory: Inventory };
 type Event = { id: number; batchId: number; adminId: number; action: string; quantity: number; reason: string | null; createdAt: string };
 
 function csrfToken(): string {
@@ -35,19 +37,18 @@ export default function Hq() {
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [stores, setStores] = useState<Store[]>([]);
+  const [lastSync, setLastSync] = useState<StoreSync | null>(null);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
-  const [storeCode, setStoreCode] = useState("");
-  const [storeName, setStoreName] = useState("");
-  const [batchForm, setBatchForm] = useState({ storeId: "", amount: "20", quantity: "10", expiresAt: "", purpose: "purchase" as "purchase" | "promotion", receiptRef: "", approver: "", approvalReason: "" });
+  const [batchForm, setBatchForm] = useState({ targetKind: "store" as TargetKind, storeId: "", recipientLabel: "", amount: "20", quantity: "10", expiresAt: "", purpose: "purchase" as "purchase" | "promotion", receiptRef: "", approver: "", approvalReason: "" });
 
   const refresh = useCallback(async () => {
     const [s, b, e] = await Promise.all([
-      hqApi<{ stores: Store[] }>("/api/hq/stores"),
+      hqApi<{ stores: Store[]; lastSync: StoreSync | null }>("/api/hq/stores"),
       hqApi<{ batches: Batch[] }>("/api/hq/batches"),
       hqApi<{ events: Event[] }>("/api/hq/events"),
     ]);
-    setStores(s.stores); setBatches(b.batches); setEvents(e.events);
+    setStores(s.stores); setLastSync(s.lastSync); setBatches(b.batches); setEvents(e.events);
   }, []);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function Hq() {
     try {
       await hqApi("/api/hq/auth/password/change", { method: "POST", body: JSON.stringify({ oldPassword: password, newPassword }) });
       setPassword(""); setNewPassword(""); setMe(current => current ? { ...current, mustChangePassword: false } : null);
-      await refresh(); setNotice("初始密码已修改，可以管理门店和批次。");
+      await refresh(); setNotice("初始密码已修改，可以同步门店并管理批次。");
     } catch (error) { setNotice(error instanceof Error ? error.message : "改密失败"); }
     finally { setBusy(false); }
   }
@@ -84,12 +85,13 @@ export default function Hq() {
     finally { setBusy(false); }
   }
 
-  async function addStore(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setNotice("");
+  async function syncStores() {
+    if (!window.confirm("从灵芝水铺内容裂变系统同步门店？已有批次和兑换码不会删除。")) return;
+    setBusy(true); setNotice("");
     try {
-      await hqApi("/api/hq/stores", { method: "POST", body: JSON.stringify({ code: storeCode, name: storeName }) });
-      setStoreCode(""); setStoreName(""); await refresh(); setNotice("门店已建立。");
-    } catch (error) { setNotice(error instanceof Error ? error.message : "门店建立失败"); }
+      const result = await hqApi<StoreSync>("/api/hq/stores/sync", { method: "POST", body: "{}" });
+      await refresh(); setNotice(`同步完成：新增 ${result.insertedCount}，更新 ${result.updatedCount}，停用 ${result.disabledCount}。`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "门店同步失败"); }
     finally { setBusy(false); }
   }
 
@@ -97,8 +99,9 @@ export default function Hq() {
     event.preventDefault(); setBusy(true); setNotice("");
     try {
       await hqApi("/api/hq/batches", { method: "POST", body: JSON.stringify({
-        storeId: Number(batchForm.storeId), amount: Number(batchForm.amount), quantity: Number(batchForm.quantity),
-        expiresAt: new Date(batchForm.expiresAt + "T23:59:59").toISOString(), purpose: batchForm.purpose, receiptRef: batchForm.receiptRef,
+        targetKind: batchForm.targetKind, storeId: batchForm.targetKind === "store" ? Number(batchForm.storeId) : null,
+        recipientLabel: batchForm.targetKind === "store" ? null : batchForm.recipientLabel.trim(), amount: Number(batchForm.amount), quantity: batchForm.targetKind === "store" ? Number(batchForm.quantity) : 1,
+        expiresAt: new Date(batchForm.expiresAt + "T23:59:59").toISOString(), purpose: batchForm.targetKind === "store" ? batchForm.purpose : "promotion", receiptRef: batchForm.receiptRef,
         approver: batchForm.approver, approvalReason: batchForm.approvalReason,
       }) });
       setBatchForm(current => ({ ...current, receiptRef: "" })); await refresh(); setNotice("待确认批次已建立，尚未生成兑换码。");
@@ -107,7 +110,8 @@ export default function Hq() {
   }
 
   async function activate(batch: Batch) {
-    if (!window.confirm(`已在线下核实门店 ${batch.storeId} 的结算／审批？确认后将一次性生成 ${batch.quantity} 张、每张 ${batch.amount} 积分的兑换码。CSV 只能下载这一次。`)) return;
+    const recipient = batch.targetKind === "store" ? `门店 ${stores.find(store => store.id === batch.storeId)?.name ?? batch.storeId}` : `${batch.recipientLabel}（非门店）`;
+    if (!window.confirm(`已核实 ${recipient} 的结算／审批？确认后将一次性生成 ${batch.quantity} 张、每张 ${batch.amount} 积分的兑换码。CSV 只能下载这一次。`)) return;
     setBusy(true); setNotice("");
     try {
       const response = await fetch(`/api/hq/batches/${batch.id}/activate`, {
@@ -118,7 +122,7 @@ export default function Hq() {
       const link = document.createElement("a"); link.href = url; link.download = `lejoy-codes-${batch.id}.csv`;
       document.body.appendChild(link); link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      await refresh(); setNotice("兑换码 CSV 已开始下载。请安全交付店长；系统无法再次查看明文码。");
+      await refresh(); setNotice("兑换码 CSV 已开始下载。请安全交付指定接收人；系统无法再次查看明文码。");
     } catch (error) { setNotice(error instanceof Error ? error.message : "操作未完成"); }
     finally { setBusy(false); }
   }
@@ -136,7 +140,7 @@ export default function Hq() {
   }
 
   async function confirmDelivery(batch: Batch) {
-    const reason = window.prompt(`确认批次 ${batch.id} 已安全交付店长。请填写交付方式和接收人（至少 8 字）:`);
+    const reason = window.prompt(`确认批次 ${batch.id} 已安全交付。请填写交付方式和接收人（至少 8 字）:`);
     if (!reason || reason.trim().length < 8) return;
     setBusy(true); setNotice("");
     try { await hqApi(`/api/hq/batches/${batch.id}/confirm-delivery`, { method: "POST", body: JSON.stringify({ reason }) }); await refresh(); setNotice("交付确认已记入审计记录。"); }
@@ -153,10 +157,23 @@ export default function Hq() {
       : me.mustChangePassword ? <form onSubmit={changePassword} className={`${cardClass} mx-auto max-w-lg space-y-4`}><h2 className="text-2xl font-bold">首次登录：修改初始密码</h2><p>完成改密后才能查看或发放兑换码。</p><label className="block">初始密码<input className={inputClass} type="password" value={password} onChange={event => setPassword(event.target.value)} required /></label><label className="block">新密码（至少 12 位）<input className={inputClass} type="password" value={newPassword} minLength={12} onChange={event => setNewPassword(event.target.value)} required /></label><button className={`${buttonClass} w-full`} disabled={busy}>修改密码</button></form>
       : <>
         <section className="grid gap-6 lg:grid-cols-2">
-          <form onSubmit={addStore} className={`${cardClass} space-y-3`}><h2 className="text-2xl font-bold">门店管理</h2><div className="grid gap-3 sm:grid-cols-2"><label>门店编号<input className={inputClass} value={storeCode} onChange={event => setStoreCode(event.target.value)} placeholder="如 SH001" required /></label><label>门店名称<input className={inputClass} value={storeName} onChange={event => setStoreName(event.target.value)} required /></label></div><button className={buttonClass} disabled={busy}>建立门店</button><ul className="space-y-1 text-stone-700">{stores.map(store => <li key={store.id}>{store.code} · {store.name}{!store.enabled ? "（停用）" : ""}</li>)}</ul></form>
-          <form onSubmit={addBatch} className={`${cardClass} space-y-3`}><h2 className="text-2xl font-bold">建立待确认批次</h2><div className="grid gap-3 sm:grid-cols-2"><label>门店<select className={inputClass} value={batchForm.storeId} onChange={event => setBatchForm({ ...batchForm, storeId: event.target.value })} required><option value="">请选择</option>{stores.filter(store => store.enabled).map(store => <option key={store.id} value={store.id}>{store.name}</option>)}</select></label><label>每码积分<input className={inputClass} type="number" min="1" max="1000000" value={batchForm.amount} onChange={event => setBatchForm({ ...batchForm, amount: event.target.value })} required /></label><label>数量（最多 1000）<input className={inputClass} type="number" min="1" max="1000" value={batchForm.quantity} onChange={event => setBatchForm({ ...batchForm, quantity: event.target.value })} required /></label><label>有效期<input className={inputClass} type="date" value={batchForm.expiresAt} onChange={event => setBatchForm({ ...batchForm, expiresAt: event.target.value })} required /></label><label>用途<select className={inputClass} value={batchForm.purpose} onChange={event => setBatchForm({ ...batchForm, purpose: event.target.value as "purchase" | "promotion" })}><option value="purchase">店长线下采购</option><option value="promotion">总部批准赠送活动</option></select></label><label>线下凭证／审批编号<input className={inputClass} value={batchForm.receiptRef} onChange={event => setBatchForm({ ...batchForm, receiptRef: event.target.value })} required /></label>{batchForm.purpose === "promotion" && <><label>审批人<input className={inputClass} value={batchForm.approver} onChange={event => setBatchForm({ ...batchForm, approver: event.target.value })} required /></label><label>活动赠码原因<input className={inputClass} value={batchForm.approvalReason} onChange={event => setBatchForm({ ...batchForm, approvalReason: event.target.value })} required /></label></>}</div><p className="text-stone-600">本步不生成码；核实线下结算或活动审批后再单独确认。</p><button className={buttonClass} disabled={busy}>建立待确认批次</button></form>
+          <section className={`${cardClass} space-y-3`}><h2 className="text-2xl font-bold">业态与门店</h2><p className="text-stone-600">仅从灵芝水铺 AI 内容裂变系统手动同步，不在此新增门店。</p><button type="button" className={buttonClass} onClick={() => void syncStores()} disabled={busy}>同步门店信息</button><p className="text-stone-600">{lastSync ? `上次成功同步：${new Date(lastSync.syncedAt).toLocaleString("zh-CN")}` : "尚未成功同步"}</p>{stores.length === 0 ? <p>暂无门店，请点击同步门店信息。</p> : <ul className="space-y-2 text-stone-700">{stores.map(store => <li key={store.id} className="rounded-lg border p-2">{store.sourceFormatName ?? store.sourceFormatId ?? "历史门店"} · {store.name}{!store.enabled ? "（停用）" : ""}</li>)}</ul>}</section>
+          <form onSubmit={addBatch} className={`${cardClass} space-y-3`}>
+            <h2 className="text-2xl font-bold">建立待确认批次</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label>发放对象<select className={inputClass} value={batchForm.targetKind} onChange={event => { const targetKind = event.target.value as TargetKind; setBatchForm({ ...batchForm, targetKind, storeId: "", recipientLabel: "", quantity: targetKind === "store" ? "10" : "1", purpose: targetKind === "store" ? "purchase" : "promotion" }); }}><option value="store">门店</option><option value="hq_staff">总部管理员</option><option value="company_test">公司测试人员</option><option value="trial">其他试用人员</option></select></label>
+              {batchForm.targetKind === "store" ? <label>门店<select className={inputClass} value={batchForm.storeId} onChange={event => setBatchForm({ ...batchForm, storeId: event.target.value })} required><option value="">请选择</option>{stores.filter(store => store.enabled && store.sourceFormatId).map(store => <option key={store.id} value={store.id}>{store.sourceFormatName} · {store.name}</option>)}</select></label> : <label>接收人姓名／标识<input className={inputClass} maxLength={160} value={batchForm.recipientLabel} onChange={event => setBatchForm({ ...batchForm, recipientLabel: event.target.value })} required /></label>}
+              <label>每码积分<input className={inputClass} type="number" min="1" max="1000000" value={batchForm.amount} onChange={event => setBatchForm({ ...batchForm, amount: event.target.value })} required /></label>
+              {batchForm.targetKind === "store" ? <label>数量（最多 1000）<input className={inputClass} type="number" min="1" max="1000" value={batchForm.quantity} onChange={event => setBatchForm({ ...batchForm, quantity: event.target.value })} required /></label> : <p className="self-center text-lg">非门店：每位接收人仅 1 张赠码</p>}
+              <label>有效期<input className={inputClass} type="date" value={batchForm.expiresAt} onChange={event => setBatchForm({ ...batchForm, expiresAt: event.target.value })} required /></label>
+              {batchForm.targetKind === "store" && <label>用途<select className={inputClass} value={batchForm.purpose} onChange={event => setBatchForm({ ...batchForm, purpose: event.target.value as "purchase" | "promotion" })}><option value="purchase">店长线下采购</option><option value="promotion">总部批准赠送活动</option></select></label>}
+              <label>线下凭证／审批编号<input className={inputClass} value={batchForm.receiptRef} onChange={event => setBatchForm({ ...batchForm, receiptRef: event.target.value })} required /></label>
+              {(batchForm.targetKind !== "store" || batchForm.purpose === "promotion") && <><label>审批人<input className={inputClass} value={batchForm.approver} onChange={event => setBatchForm({ ...batchForm, approver: event.target.value })} required /></label><label>赠码原因<input className={inputClass} value={batchForm.approvalReason} onChange={event => setBatchForm({ ...batchForm, approvalReason: event.target.value })} required /></label></>}
+            </div>
+            <p className="text-stone-600">本步不生成码；核实线下结算或总部审批后再单独确认。</p><button className={buttonClass} disabled={busy}>建立待确认批次</button>
+          </form>
         </section>
-        <section className={cardClass}><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">批次与库存</h2><button className="rounded-xl border border-stone-400 px-4 py-2" onClick={() => void refresh().catch(error => setNotice(error.message))}>刷新</button></div><p className="my-3 text-stone-600">已分配 = 已兑换 + 未兑换 + 已过期 + 已停用；待确认批次尚无兑换码。</p><div className="overflow-x-auto"><table className="w-full min-w-[800px] border-collapse text-left"><thead><tr className="border-b text-stone-600"><th className="p-2">批次／门店</th><th className="p-2">用途／面额</th><th className="p-2">状态／有效期</th><th className="p-2">库存</th><th className="p-2">操作</th></tr></thead><tbody>{batches.map(batch => <tr key={batch.id} className="border-b align-top"><td className="p-2">#{batch.id}<br />{stores.find(store => store.id === batch.storeId)?.name ?? batch.storeId}<br /><small>{batch.receiptRef}</small></td><td className="p-2">{batch.purpose === "purchase" ? "线下采购" : "总部活动"}<br />{batch.amount} 分 × {batch.quantity} 张</td><td className="p-2">{batch.status === "pending" ? "待确认" : batch.status === "active" ? "已激活" : "已停用"}<br />{batch.expiresAt.slice(0, 10)}{batch.delivered && <><br />已确认交付</>}</td><td className="p-2">已分配 {batch.inventory.allocated} · 已兑换 {batch.inventory.redeemed}<br />未兑换 {batch.inventory.unused} · 已过期 {batch.inventory.expired} · 已停用 {batch.inventory.revoked}</td><td className="p-2 space-x-2">{batch.status === "pending" && <button className={buttonClass} disabled={busy} onClick={() => void activate(batch)}>确认并下载 CSV</button>}{batch.status === "active" && !batch.delivered && <button className="rounded-xl border border-amber-700 px-4 py-3 text-amber-900" disabled={busy} onClick={() => void confirmDelivery(batch)}>确认已安全交付</button>}{batch.status !== "revoked" && <button className="rounded-xl border border-red-700 px-4 py-3 text-red-800" disabled={busy} onClick={() => void revoke(batch)}>停用未兑换码</button>}</td></tr>)}</tbody></table>{batches.length === 0 && <p className="p-4 text-stone-500">暂无批次</p>}</div></section>
+        <section className={cardClass}><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">批次与库存</h2><button className="rounded-xl border border-stone-400 px-4 py-2" onClick={() => void refresh().catch(error => setNotice(error.message))}>刷新</button></div><p className="my-3 text-stone-600">已分配 = 已兑换 + 未兑换 + 已过期 + 已停用；待确认批次尚无兑换码。</p><div className="overflow-x-auto"><table className="w-full min-w-[800px] border-collapse text-left"><thead><tr className="border-b text-stone-600"><th className="p-2">批次／接收对象</th><th className="p-2">用途／面额</th><th className="p-2">状态／有效期</th><th className="p-2">库存</th><th className="p-2">操作</th></tr></thead><tbody>{batches.map(batch => <tr key={batch.id} className="border-b align-top"><td className="p-2">#{batch.id}<br />{batch.targetKind === "store" ? stores.find(store => store.id === batch.storeId)?.name ?? `门店 #${batch.storeId}` : `${{ hq_staff: "总部管理员", company_test: "公司测试人员", trial: "其他试用人员" }[batch.targetKind]} · ${batch.recipientLabel ?? "未标注"}`}<br /><small>{batch.receiptRef}</small></td><td className="p-2">{batch.purpose === "purchase" ? "线下采购" : "总部赠码"}<br />{batch.amount} 分 × {batch.quantity} 张</td><td className="p-2">{batch.status === "pending" ? "待确认" : batch.status === "active" ? "已激活" : "已停用"}<br />{batch.expiresAt.slice(0, 10)}{batch.delivered && <><br />已确认交付</>}</td><td className="p-2">已分配 {batch.inventory.allocated} · 已兑换 {batch.inventory.redeemed}<br />未兑换 {batch.inventory.unused} · 已过期 {batch.inventory.expired} · 已停用 {batch.inventory.revoked}</td><td className="p-2 space-x-2">{batch.status === "pending" && <button className={buttonClass} disabled={busy} onClick={() => void activate(batch)}>确认并下载 CSV</button>}{batch.status === "active" && !batch.delivered && <button className="rounded-xl border border-amber-700 px-4 py-3 text-amber-900" disabled={busy} onClick={() => void confirmDelivery(batch)}>确认已安全交付</button>}{batch.status !== "revoked" && <button className="rounded-xl border border-red-700 px-4 py-3 text-red-800" disabled={busy} onClick={() => void revoke(batch)}>停用未兑换码</button>}</td></tr>)}</tbody></table>{batches.length === 0 && <p className="p-4 text-stone-500">暂无批次</p>}</div></section>
         <section className={cardClass}><h2 className="mb-3 text-2xl font-bold">操作记录</h2><ul className="space-y-2">{events.map(item => <li key={item.id} className="border-b pb-2">{new Date(item.createdAt).toLocaleString("zh-CN")} · 管理员 #{item.adminId} · 批次 #{item.batchId} · {item.action} · {item.quantity} 张{item.reason ? ` · ${item.reason}` : ""}</li>)}{events.length === 0 && <li className="text-stone-500">暂无操作记录</li>}</ul></section>
       </>}
     </div>
