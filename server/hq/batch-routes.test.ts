@@ -7,6 +7,7 @@ import { createHqBatchRouter } from "./batch-routes";
 
 let server: ReturnType<typeof createServer>; let base: string;
 let service: Record<string, ReturnType<typeof vi.fn>>;
+let storeSync: Record<string, ReturnType<typeof vi.fn>>;
 let mustChangePassword = 0;
 const token = "a".repeat(64); const csrf = "b".repeat(48);
 const cookie = `__Host-hq_session=${token}; __Host-hq_csrf=${csrf}`;
@@ -26,9 +27,15 @@ beforeEach(async () => {
     listBatches: vi.fn(async () => []),
     listEvents: vi.fn(async () => []),
   };
+  storeSync = {
+    fetchCatalog: vi.fn(async () => [{ formatId: "community", formatName: "社区店", storeId: "nanjing", storeName: "南京店" }]),
+    sync: vi.fn(async () => ({ insertedCount: 1, updatedCount: 0, disabledCount: 0, syncedAt: "2026-09-18T00:00:00.000Z" })),
+    lastSuccess: vi.fn(async () => null),
+    recordFailure: vi.fn(async () => {}),
+  };
   const store = { findActiveSession: vi.fn(async (hash: string) => hash === sha256(token) ? { adminId: 3, account: { id: 3, disabled: 0, mustChangePassword } } : null) };
   const app = express(); app.use(express.json());
-  app.use("/api/hq", createHqBatchRouter({ authStore: store as never, service: service as never, expectedOrigin: origin }));
+  app.use("/api/hq", createHqBatchRouter({ authStore: store as never, service: service as never, storeSync: storeSync as never, expectedOrigin: origin } as never));
   server = createServer(app); await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
@@ -41,7 +48,42 @@ describe("HQ batch API", () => {
     mustChangePassword = 1;
     expect((await request("/batches")).status).toBe(403);
     expect((await request("/batches/7/activate", "POST", {})).status).toBe(403);
+    expect((await request("/stores/sync", "POST", {})).status).toBe(403);
     expect(service.createBatch).not.toHaveBeenCalled();
+    expect((await request("/stores/sync", "POST", {}, { cookie: "legacy_session=x" })).status).toBe(401);
+    expect((await request("/stores/sync", "POST", {}, { "x-csrf-token": "" })).status).toBe(403);
+    expect(storeSync.fetchCatalog).not.toHaveBeenCalled();
+  });
+
+  it("只在总部管理员点击同步时读取来源，不允许再手工建立门店", async () => {
+    const listed = await request("/stores");
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ stores: [], lastSync: null });
+    expect(storeSync.fetchCatalog).not.toHaveBeenCalled();
+    expect((await request("/stores", "POST", { code: "FAKE", name: "假门店" })).status).toBe(405);
+    expect(service.createStore).not.toHaveBeenCalled();
+    const synced = await request("/stores/sync", "POST", {});
+    expect(synced.status).toBe(200);
+    expect(await synced.json()).toMatchObject({ insertedCount: 1, updatedCount: 0, disabledCount: 0 });
+    expect(storeSync.fetchCatalog).toHaveBeenCalledTimes(1);
+    expect(storeSync.sync).toHaveBeenCalledWith(expect.any(Array), 3);
+  });
+
+  it("同步失败不改本地目录，同步中的第二次点击返回冲突", async () => {
+    storeSync.fetchCatalog.mockRejectedValueOnce(new Error("remote secret must not leak"));
+    const failed = await request("/stores/sync", "POST", {});
+    expect(failed.status).toBe(503);
+    expect(await failed.text()).not.toContain("remote secret");
+    expect(storeSync.sync).not.toHaveBeenCalled();
+    expect(storeSync.recordFailure).toHaveBeenCalledWith(3, expect.any(String));
+
+    let release: ((value: unknown) => void) | undefined;
+    storeSync.fetchCatalog.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const first = request("/stores/sync", "POST", {});
+    await vi.waitFor(() => expect(storeSync.fetchCatalog).toHaveBeenCalledTimes(2));
+    expect((await request("/stores/sync", "POST", {})).status).toBe(409);
+    release!([{ formatId: "community", formatName: "社区店", storeId: "nanjing", storeName: "南京店" }]);
+    expect((await first).status).toBe(200);
   });
   it("creates pending batches and exports raw codes only in one activation response", async () => {
     const create = await request("/batches", "POST", { storeId: 1, amount: 20, quantity: 1, expiresAt: "2027-01-01", purpose: "purchase", receiptRef: "OFFLINE-1" });

@@ -1,5 +1,8 @@
 import { Router } from "express";
 import { createCreditCodeService, getCreditCodeService, type BatchInput, validateBatchInput } from "../credits/codes";
+import { fetchStoreCatalog, type StoreCatalogRow } from "../credits/store-source";
+import { getLastStoreSync, recordStoreSyncFailure, syncStoreCatalog } from "../credits/store-sync";
+import { getDb } from "../db";
 import { createHqAuthStore } from "./auth-store";
 import { requireHqAdmin, requireHqCsrf, requireHqReady } from "./auth-routes";
 
@@ -7,6 +10,12 @@ type Options = {
   authStore?: ReturnType<typeof createHqAuthStore>;
   service?: ReturnType<typeof createCreditCodeService>;
   expectedOrigin?: string;
+  storeSync?: {
+    fetchCatalog: () => Promise<StoreCatalogRow[]>;
+    sync: (rows: StoreCatalogRow[], adminId: number) => Promise<{ insertedCount: number; updatedCount: number; disabledCount: number; syncedAt: string }>;
+    lastSuccess: () => Promise<unknown>;
+    recordFailure: (adminId: number, errorCode: string) => Promise<void>;
+  };
 };
 
 function parsedBatch(body: Record<string, unknown>): BatchInput {
@@ -24,17 +33,41 @@ function parsedBatch(body: Record<string, unknown>): BatchInput {
 export function createHqBatchRouter(options: Options = {}) {
   const router = Router();
   const service = () => options.service ? Promise.resolve(options.service) : getCreditCodeService();
+  const storeDb = async () => {
+    const db = await getDb();
+    if (!db) throw new Error("数据库不可用");
+    return db;
+  };
+  const storeSync = options.storeSync ?? {
+    fetchCatalog: () => fetchStoreCatalog({ apiKey: process.env.LINGZHI_INTERNAL_API_KEY ?? "" }),
+    sync: async (rows: StoreCatalogRow[], adminId: number) => syncStoreCatalog(await storeDb(), rows, adminId),
+    lastSuccess: async () => getLastStoreSync(await storeDb()),
+    recordFailure: async (adminId: number, errorCode: string) => recordStoreSyncFailure(await storeDb(), adminId, errorCode),
+  };
+  let syncing = false;
   router.use(requireHqAdmin({ store: options.authStore, expectedOrigin: options.expectedOrigin }), requireHqReady);
   router.get("/stores", async (_req, res) => {
-    try { res.setHeader("Cache-Control", "no-store"); res.json({ stores: await (await service()).listStores() }); }
+    try {
+      const [storeList, lastSync] = await Promise.all([(await service()).listStores(), storeSync.lastSuccess()]);
+      res.setHeader("Cache-Control", "no-store"); res.json({ stores: storeList, lastSync });
+    }
     catch { res.status(503).json({ code: "HQ_UNAVAILABLE", message: "门店列表暂不可用" }); }
   });
-  router.post("/stores", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), async (req, res) => {
+  router.post("/stores", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), (_req, res) => {
+    res.status(405).json({ code: "STORE_MANUAL_CREATE_DISABLED", message: "门店只能从内容裂变系统同步" });
+  });
+  router.post("/stores/sync", requireHqCsrf({ expectedOrigin: options.expectedOrigin }), async (_req, res) => {
+    if (syncing) { res.status(409).json({ code: "STORE_SYNC_IN_PROGRESS", message: "门店正在同步，请稍后刷新" }); return; }
+    syncing = true;
     try {
-      const { code, name } = req.body ?? {};
-      if (typeof code !== "string" || typeof name !== "string") { res.status(400).json({ code: "BAD_REQUEST" }); return; }
-      res.status(201).json(await (await service()).createStore({ code, name }));
-    } catch { res.status(400).json({ code: "BAD_REQUEST", message: "门店编号或名称无效，或编号已存在" }); }
+      const rows = await storeSync.fetchCatalog();
+      const result = await storeSync.sync(rows, res.locals.hqAdminId);
+      res.setHeader("Cache-Control", "no-store"); res.json(result);
+    } catch {
+      const code = !options.storeSync && !process.env.LINGZHI_INTERNAL_API_KEY ? "SOURCE_NOT_CONFIGURED" : "STORE_SYNC_UNAVAILABLE";
+      try { await storeSync.recordFailure(res.locals.hqAdminId, code); } catch { /* failure audit may be unavailable with the database */ }
+      res.status(503).json({ code, message: code === "SOURCE_NOT_CONFIGURED" ? "门店同步尚未配置，请联系技术人员" : "门店同步未完成，原门店列表未变化" });
+    } finally { syncing = false; }
   });
   router.get("/batches", async (_req, res) => {
     try { res.setHeader("Cache-Control", "no-store"); res.json({ batches: await (await service()).listBatches() }); }
