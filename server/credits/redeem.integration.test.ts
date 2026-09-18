@@ -7,8 +7,50 @@ import { creditCodeBatches, creditCodes, creditTransactions, stores, users } fro
 import { sha256 } from "../hq/auth-crypto";
 import { createCode, normalizeCode } from "./codes";
 import { redeemCodeInDatabase } from "./redeem";
+import { syncStoreCatalog } from "./store-sync";
 
 describe("redemption against an isolated MySQL test database", () => {
+  it.skipIf(!process.env.TEST_DATABASE_URL)("支持无门店具名赠码，门店同步幂等且失败不留半成品", async () => {
+    const url = new URL(process.env.TEST_DATABASE_URL!);
+    if (!url.pathname.slice(1).endsWith("_test")) throw new Error("TEST_DATABASE_URL 必须指向独立的 *_test 数据库");
+    const pool = mysql.createPool(process.env.TEST_DATABASE_URL!);
+    const db = drizzle(pool);
+    const suffix = randomBytes(8).toString("hex");
+    const sourceId = `integration-${suffix}`;
+    let userId = 0; let batchId = 0; let codeId = 0;
+    try {
+      const userResult = await db.insert(users).values({ openId: `nonstore_${suffix}`, credits: 0 });
+      userId = Number(userResult[0].insertId);
+      const batchResult = await db.insert(creditCodeBatches).values({ targetKind: "company_test", storeId: null, recipientLabel: `测试员 ${suffix}`, amount: 7, quantity: 1, expiresAt: new Date(Date.now() + 86_400_000), purpose: "promotion", receiptRef: `APP-${suffix}`, status: "active", createdBy: 1, activatedBy: 1, activatedAt: new Date() });
+      batchId = Number(batchResult[0].insertId);
+      const code = createCode();
+      const inserted = await db.insert(creditCodes).values({ batchId, codeHash: sha256(normalizeCode(code)) });
+      codeId = Number(inserted[0].insertId);
+      await redeemCodeInDatabase(db, userId, code);
+      await expect(redeemCodeInDatabase(db, userId, code)).rejects.toThrow();
+      const [updatedUser] = await db.select({ credits: users.credits }).from(users).where(eq(users.id, userId));
+      expect(updatedUser.credits).toBe(7);
+      expect(await db.select().from(creditTransactions).where(eq(creditTransactions.creditCodeId, codeId))).toHaveLength(1);
+      const rollbackMarker = new Error("rollback test catalog");
+      await expect(db.transaction(async tx => {
+        const catalog = [{ formatId: sourceId, formatName: "测试业态", storeId: sourceId, storeName: "测试门店" }];
+        expect((await syncStoreCatalog(tx as never, catalog, 1)).insertedCount).toBeGreaterThan(0);
+        const [mirrored] = await tx.select().from(stores).where(and(eq(stores.sourceFormatId, sourceId), eq(stores.sourceStoreId, sourceId)));
+        expect((await syncStoreCatalog(tx as never, catalog, 1)).insertedCount).toBe(0);
+        await expect(syncStoreCatalog(tx as never, [{ ...catalog[0], storeName: "新名称" }, { ...catalog[0], storeName: "重复键" }], 1)).rejects.toThrow();
+        const [unchanged] = await tx.select().from(stores).where(eq(stores.id, mirrored.id));
+        expect(unchanged.name).toBe("测试门店");
+        throw rollbackMarker;
+      })).rejects.toBe(rollbackMarker);
+      expect(await db.select().from(stores).where(and(eq(stores.sourceFormatId, sourceId), eq(stores.sourceStoreId, sourceId)))).toHaveLength(0);
+    } finally {
+      if (codeId) await db.delete(creditTransactions).where(eq(creditTransactions.creditCodeId, codeId));
+      if (codeId) await db.delete(creditCodes).where(eq(creditCodes.id, codeId));
+      if (batchId) await db.delete(creditCodeBatches).where(eq(creditCodeBatches.id, batchId));
+      if (userId) await db.delete(users).where(eq(users.id, userId));
+      await pool.end();
+    }
+  }, 30_000);
   it.skipIf(!process.env.TEST_DATABASE_URL)("allows exactly one concurrent winner and rolls back on ledger failure", async () => {
     const url = new URL(process.env.TEST_DATABASE_URL!);
     if (!url.pathname.slice(1).endsWith("_test")) throw new Error("TEST_DATABASE_URL 必须指向独立的 *_test 数据库");
