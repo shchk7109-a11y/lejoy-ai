@@ -18,9 +18,20 @@ describe("HQ web portal isolation", () => {
     expect(source).not.toContain("/api/hq/stores\", { method: \"POST\"");
     expect(source).toContain("recipientLabel");
     expect(source).toContain("lastSync.createdAt");
-    expect(source).toContain("groupedStores");
+    expect(source).not.toContain("groupedStores");
     expect(source).toContain("company_test");
     expect(source).toContain("trial");
+  });
+  it("门店变化仅保存于本次同步的页面状态，并说明一次性 CSV 如何查看", () => {
+    const source = readFileSync(new URL("../../client/src/pages/Hq.tsx", import.meta.url), "utf8");
+    expect(source).toContain("const [changedStores, setChangedStores] = useState<ChangedStore[]>([])");
+    expect(source).toContain("setChangedStores(result.changedStores)");
+    expect(source).toContain("setChangedStores([])");
+    expect(source).toContain("changedStores.map(");
+    expect(source).toContain("Numbers 或 Excel");
+    expect(source).toContain("第一列");
+    expect(source).not.toContain("text-lg");
+    expect(source).not.toContain("text-3xl");
   });
   it("在批次表单旁显示校验与服务端错误", () => {
     const source = readFileSync(new URL("../../client/src/pages/Hq.tsx", import.meta.url), "utf8");
