@@ -22,4 +22,11 @@ describe("HQ web portal isolation", () => {
     expect(source).toContain("company_test");
     expect(source).toContain("trial");
   });
+  it("在批次表单旁显示校验与服务端错误", () => {
+    const source = readFileSync(new URL("../../client/src/pages/Hq.tsx", import.meta.url), "utf8");
+    expect(source).toContain("validateHqCreditForm(batchForm)");
+    expect(source).toContain("赠码原因至少填写 4 字");
+    expect(source).toContain('batchError && <p role="alert"');
+    expect(source).toContain("setBatchError(error instanceof Error");
+  });
 });
